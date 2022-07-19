@@ -1,4 +1,6 @@
+import json
 import math
+from pprint import pprint
 import tkinter
 from cmu_112_graphics import *
 import random
@@ -40,11 +42,20 @@ class Chunk:
         return self.x <= x and x < self.x + app.CHUNK_SIZE
 class Game:
     def __init__(self, app):
-        self.chunks = []
+        self.chunks = {}
         for i in range(20):
             chunkX = (i - 10) * app.CHUNK_SIZE + 2
-            self.chunks.append(Chunk(app, chunkX, i))
+            self.chunks[i] = Chunk(app, chunkX, i)
 
+    def generateChunk(self, app, right):
+        if right:
+            highest = max(self.chunks)
+            chunk = Chunk(app, self.chunks[highest].x + app.CHUNK_SIZE, len(self.chunks))
+            self.chunks[len(self.chunks)] = chunk
+        else:
+            lowest = min(self.chunks)
+            chunk = Chunk(app, self.chunks[lowest].x - app.CHUNK_SIZE, lowest - 1)
+            self.chunks[lowest - 1] = chunk
 class Entity:
     def __init__(self, app):
         self.x = 0
@@ -75,7 +86,8 @@ def almostEqual(d1, d2, epsilon=10**-7):  # helper-fn
     return (abs(d2 - d1) < epsilon)
 
 def getBlockFromCoords(app, x, y):
-    for chunk in app.game.chunks:
+    for chunk_i in app.game.chunks:
+        chunk = app.game.chunks[chunk_i]
         if (x, y) in chunk.blocks:
             return chunk.blocks[(x, y)]
     return None
@@ -94,7 +106,8 @@ def getCoordsFromPix(app, xPix, yPix):
     # the index of the first chunk on the screen
     startChunkIndex = int(max(0, app.player.chunk - (chunksOnScreen / 2))) + 1
     blockY = ((app.height - yPix) // app.UNIT_WH) + 1
-    for chunk in app.game.chunks[startChunkIndex:startChunkIndex + chunksOnScreen]:
+    for chunk_i in range(startChunkIndex,startChunkIndex + chunksOnScreen):
+        chunk = app.game.chunks[chunk_i]
         for b in range(app.CHUNK_SIZE):
             if (b + chunk.x, blockY) in chunk.blocks:
                 block = chunk.blocks[(b + chunk.x, blockY)]
@@ -107,7 +120,8 @@ def getPixFromCoords(app, x, y):
         (app.height - y * app.UNIT_WH) + (app.UNIT_WH // 2)
 
 def getGround(app, x):
-    for chunk in app.game.chunks:
+    for chunk_i in app.game.chunks:
+        chunk = app.game.chunks[chunk_i]
         if chunk.x < x and x < chunk.x + app.CHUNK_SIZE:
             for r in range(32, -1, -1):
                 if (x, r) in chunk.blocks:
@@ -152,6 +166,17 @@ def keyPressed(app, event):
     """
     if event.key == "d":
         app.func.debug = not app.func.debug
+    """
+    GAME
+    """
+    chunksOnScreen = int(app.width / (app.CHUNK_SIZE * app.UNIT_WH)) + 2
+    startChunkIndex = int(max(0, app.player.chunk - (chunksOnScreen / 2))) + 1
+    if startChunkIndex + chunksOnScreen + 5 > len(app.game.chunks):
+        for i in range(len(app.game.chunks), startChunkIndex + chunksOnScreen):
+            app.game.generateChunk(app, True)
+    elif startChunkIndex - 5 < min(app.game.chunks):
+        for i in range(startChunkIndex - 5, 0):
+            app.game.generateChunk(app, False)
 
 def mouseMoved(app, event):
     app.func.mouseX = event.x
@@ -161,7 +186,6 @@ def mouseMoved(app, event):
         app.func.hovering = getBlockFromCoords(app, coords[0], coords[1])
 
 def mousePressed(app, event):
-    print(getGround(app, getCoordsFromPix(app, event.x, event.y)[0]))
     pass
 
 def drawChunk(app, canvas: tkinter.Canvas, chunk: Chunk):
@@ -193,8 +217,9 @@ def drawChunk(app, canvas: tkinter.Canvas, chunk: Chunk):
                                 fill=getBlockFill(block), outline="#00ff00")
 
 def drawGame(app, canvas: tkinter.Canvas):
-    chunksOnScreen = int(app.width / (app.CHUNK_SIZE * app.UNIT_WH)) + 2
-    startChunkIndex = int(max(0, app.player.chunk - (chunksOnScreen / 2))) + 1
+    chunksOnScreen = int(app.width / (app.CHUNK_SIZE * app.UNIT_WH)) + 3
+    startChunkIndex = int(app.player.chunk - (chunksOnScreen / 2))
+
     for chunk_i in range(startChunkIndex, chunksOnScreen + startChunkIndex):
         drawChunk(app, canvas, app.game.chunks[chunk_i])
 
