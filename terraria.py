@@ -2,6 +2,8 @@ import json
 import math
 from pprint import pprint
 import tkinter
+
+from PIL import Image,ImageTk
 from cmu_112_graphics import *
 import random
 from enum import Enum
@@ -69,6 +71,7 @@ class Player(Entity):
         self.y = app.GROUND_LEVEL + 1
         self.inventory = []
         self.falling = 0
+        self.orient = 1
 
 class Functionality:
     def __init__(self, app):
@@ -156,9 +159,11 @@ def keyPressed(app, event):
         app.player.falling = 0.01
     ground = getGround(app, roundHalfUp(app.player.x)) - 1
     if event.key == "Left":
+        app.player.orient = -1
         app.player.x = round(app.player.x - 0.5, 5)
         app.player.chunk = getBlockFromCoords(app, int(app.player.x), ground).chunk
     elif event.key == "Right":
+        app.player.orient = 1
         app.player.x = round(app.player.x + 0.5, 5)
         app.player.chunk = getBlockFromCoords(app, int(app.player.x), ground).chunk
     """
@@ -226,14 +231,16 @@ def drawGame(app, canvas: tkinter.Canvas):
 def drawPlayer(app, canvas: tkinter.Canvas):
     _, y = getPixFromCoords(app, app.player.x, app.player.y)
     x = app.width / 2
-    canvas.create_oval(x, y - (app.UNIT_WH / 2), 
-                       x + app.UNIT_WH, y + (app.UNIT_WH / 2),
-                       fill="#00ff00")
+    image = Image.open("boris.png").resize((app.UNIT_WH, app.UNIT_WH))
+    if app.player.orient == -1:
+        image = image.transpose(method=Image.Transpose.FLIP_LEFT_RIGHT)
+    canvas.create_image(x, y + (app.UNIT_WH / 2), image=ImageTk.PhotoImage(image), anchor="sw")
 
 def drawDebug(app, canvas: tkinter.Canvas):
     blockCoords = getCoordsFromPix(app, app.func.mouseX, app.func.mouseY)
+    orient = '>' if app.player.orient == 1 else '<'
     canvas.create_text(5, 20,
-                       text=f'P: ({app.player.x}, {app.player.y}) {app.player.chunk}', fill="#000000", anchor="w")
+                       text=f'P: ({app.player.x}, {app.player.y}) {app.player.chunk} {orient}', fill="#000000", anchor="w")
     if blockCoords:
         block = getBlockFromCoords(app, blockCoords[0], blockCoords[1])
         canvas.create_text(5, 40,
