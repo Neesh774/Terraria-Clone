@@ -1,6 +1,5 @@
-import json
-import math
-from pprint import pprint
+import cProfile
+from time import time
 import tkinter
 
 from PIL import Image,ImageTk
@@ -11,314 +10,179 @@ import decimal
 import os
 from assets.colors import colors
 
-###############################################################################
-# CLASSES
-class Blocks(Enum):
-    GRASS = 0
-    DIRT = 1
-    STONE = 2
-
-class Block:
-    def __init__(self, x, y, block: Blocks, chunk):
-        self.x = x
-        self.y = y
-        self.type = block
-        self.chunk = chunk
-
-class Chunk:
-    def __init__(self, app, x, chunkI):
-        self.blocks = {}
-        self.x = x
-        for i in range(app.CHUNK_SIZE):
-            # TODO: random ground level
-            row_grass_level = app.GRASS_LEVEL + random.randint(0, 1)
-            row_dirt_level = app.DIRT_LEVEL + random.randint(0, 1)
-            for r in range(app.GROUND_LEVEL, 0, -1):
-                if r > row_grass_level:
-                    self.blocks[(x+i, r)] = Block(x+i, r, Blocks.GRASS, chunkI)
-                elif r > row_dirt_level:
-                    self.blocks[(x+i, r)] = Block(x+i, r, Blocks.DIRT, chunkI)
-                else:
-                    self.blocks[(x+i, r)] = Block(x+i, r, Blocks.STONE, chunkI)
-    def getRange(self):
-        return self.x, self.x + self.CHUNK_SIZE
-    def inChunk(self, app, x):
-        return self.x <= x and x < self.x + app.CHUNK_SIZE
-class Game:
-    def __init__(self, app):
-        self.chunks = {}
-        self.time = 0
-        self.bgX = [0, app.background.width(), -app.background.width()]
-        for i in range(20):
-            chunkX = (i - 10) * app.CHUNK_SIZE + 2
-            self.chunks[i] = Chunk(app, chunkX, i)
-
-    def generateChunk(self, app, right):
-        if right:
-            highest = max(self.chunks)
-            chunk = Chunk(app, self.chunks[highest].x + app.CHUNK_SIZE, len(self.chunks))
-            self.chunks[len(self.chunks)] = chunk
-        else:
-            lowest = min(self.chunks)
-            chunk = Chunk(app, self.chunks[lowest].x - app.CHUNK_SIZE, lowest - 1)
-            self.chunks[lowest - 1] = chunk
-            
-    def getChunk(self, app, i):
-        if i in self.chunks:
-            return self.chunks[i]
-        else:
-            while i not in self.chunks:
-                self.generateChunk(app, i > 10)
-            return self.chunks[i]
-class Entity:
-    def __init__(self, app):
-        self.x = 0
-        self.y = app.GROUND_LEVEL + 1
-        self.falling = 0
-
-class Player(Entity):
-    def __init__(self, app):
-        self.chunk = 9
-        self.x = 0
-        self.y = app.GROUND_LEVEL + 1
-        self.inventory = []
-        self.falling = 0
-        self.orient = 1
-        self.health = 20
-        self.image = Image.open("assets/boris.png").resize((app.UNIT_WH, app.UNIT_WH))
-    
-    def getSprite(self):
-        image = self.image.copy()
-        if self.orient == -1:
-            image = image.transpose(method=Image.Transpose.FLIP_LEFT_RIGHT)
-        return ImageTk.PhotoImage(image)
-
-class Item(Entity):
-    def __init__(self, app, name, x, y, props = None, count = 1):
-        self.name = name
-        self.x = x
-        self.y = y
-        self.count = count
-        self.props = props
-        
-
-class Functionality:
-    def __init__(self, app):
-        self.mouseX = 0
-        self.mouseY = 0
-        self.hovering = None
-        self.debug = True
-        
-        
-###############################################################################
-# HELPER FUNCS
-
-def almostEqual(d1, d2, epsilon=10**-7):  # helper-fn
-    # note: use math.isclose() outside 15-112 with Python version 3.5 or later
-    return (abs(d2 - d1) < epsilon)
-
-def getBlockFromCoords(app, x, y):
-    for chunk_i in app.game.chunks:
-        chunk = app.game.getChunk(app, chunk_i)
-        if (x, y) in chunk.blocks:
-            return chunk.blocks[(x, y)]
-    return None
-
-def isOnGround(app):
-    playerY = app.player.y
-    y = (app.height - playerY * app.UNIT_WH) - 1
-    groundY = (app.height - getGround(app, roundHalfUp(app.player.x)) * app.UNIT_WH) - 1
-    if y - app.player.falling + 0.3 > groundY:
-        return True
-    return False
-
-def getCoordsFromPix(app, xPix, yPix):
-    # divide width by chunk size, add 2 chunks for margin
-    chunksOnScreen = int(app.width / (app.CHUNK_SIZE * app.UNIT_WH)) + 2
-    # the index of the first chunk on the screen
-    startChunkIndex = int(max(0, app.player.chunk - (chunksOnScreen / 2))) + 1
-    blockY = ((app.height - yPix) // app.UNIT_WH) + 1
-    for chunk_i in range(startChunkIndex,startChunkIndex + chunksOnScreen):
-        chunk = app.game.getChunk(app, chunk_i)
-        for b in range(app.CHUNK_SIZE):
-            if (b + chunk.x, blockY) in chunk.blocks:
-                block = chunk.blocks[(b + chunk.x, blockY)]
-                blockX = ((block.x - app.player.x) * app.UNIT_WH) + (app.width // 2)
-                if blockX <= xPix and xPix < blockX + app.UNIT_WH:
-                    return block.x, block.y
-        
-def getPixFromCoords(app, x, y):
-    return (x * app.UNIT_WH) + (app.width // 2) + (app.UNIT_WH // 2), \
-        (app.height - y * app.UNIT_WH) + (app.UNIT_WH // 2)
-
-def getGround(app, x):
-    for chunk_i in app.game.chunks:
-        chunk = app.game.getChunk(app, chunk_i)
-        if chunk.x < x and x < chunk.x + app.CHUNK_SIZE:
-            for r in range(app.BUILD_HEIGHT, -1, -1):
-                if (x, r) in chunk.blocks:
-                    return chunk.blocks[(x, r)].y + 1
-    return app.GROUND_LEVEL + 1
-
-def generateChunks(app):
-    chunksOnScreen = int(app.width / (app.CHUNK_SIZE * app.UNIT_WH)) + 2
-    startChunkIndex = int(max(0, app.player.chunk - (chunksOnScreen / 2))) + 1
-    if startChunkIndex + chunksOnScreen + 5 > len(app.game.chunks):
-        for i in range(len(app.game.chunks), startChunkIndex + chunksOnScreen):
-            app.game.generateChunk(app, True)
-    elif startChunkIndex - 5 < min(app.game.chunks):
-        for i in range(startChunkIndex - 5, 0):
-            app.game.generateChunk(app, False)
-    
-def checkBackground(app):
-    if min(app.game.bgX) > 0:
-            app.game.bgX = [0] + app.game.bgX
-    if max(app.game.bgX) < app.width:
-            app.game.bgX = app.game.bgX + [max(app.game.bgX) + app.background.width()]
-def roundHalfUp(d):  # helper-fn
-    # Round to nearest with ties going away from zero.
-    rounding = decimal.ROUND_HALF_UP
-    # See other rounding options here:
-    # https://docs.python.org/3/library/decimal.html#rounding-modes
-    return int(decimal.Decimal(d).to_integral_value(rounding=rounding))
-
-def getImage(app, name):
-    return app.images[name]
+from classes import *
+from helpers import *
 
 ###############################################################################
 # MVC
 
 def appStarted(app):
-    app.GRASS_LEVEL = 8
+    app.GRASS_LEVEL = 9
     app.DIRT_LEVEL = 4
     app.UNIT_WH = 18
     app.GROUND_LEVEL = int((app.height / 2) - 40) // app.UNIT_WH
     app.CHUNK_SIZE = 8
     app.BUILD_HEIGHT = 64
+    app.STACK_MAX = 32
     app.images = {}
     app.background = ImageTk.PhotoImage(Image.open("assets/background.png"))
     for f in os.listdir("assets"):
         if not f.endswith(".png"):
             continue
-        app.images[f[:-4]] = ImageTk.PhotoImage(Image.open("assets/" + f).resize((app.UNIT_WH, app.UNIT_WH)))
-    app.game = Game(app)
+        app.images[f[:-4]] = Image.open("assets/" + f)
+    for f in os.listdir("assets/blocks"):
+        if not f.endswith(".png"):
+            continue
+        app.images[f[:-4]] = Image.open("assets/blocks/" + f).resize((app.UNIT_WH, app.UNIT_WH))
     app.player = Player(app)
+    app.game = Game(app)
+    app.game.loadChunks(app)
     app.func = Functionality(app)
+    app.lastTime = time()
     checkBackground(app)
+    app.setPosition(600, 200)
+    
+    app.boldFont = ("Farisi", 16, "bold")
+    app.smallFont = ("Farisi", 16)
+    app.debugFont = ("Arial", 12)
 
 def keyPressed(app, event):
-    """
-    PLAYER
-    """
-    if event.key == "Up" and app.player.falling < 0.05:
-        app.player.falling = 0.01
-    ground = getGround(app, roundHalfUp(app.player.x)) - 1
-    if event.key == "Left":
-        app.player.orient = -1
-        app.player.x = round(app.player.x - 0.5, 5)
-        app.player.chunk = getBlockFromCoords(app, int(app.player.x), ground).chunk
-        app.game.bgX = [app.game.bgX[i] + 2 for i in range(len(app.game.bgX))]
-    elif event.key == "Right":
-        app.player.orient = 1
-        app.player.x = round(app.player.x + 0.5, 5)
-        app.player.chunk = getBlockFromCoords(app, int(app.player.x), ground).chunk
-        app.game.bgX = [app.game.bgX[i] - 2 for i in range(len(app.game.bgX))]
-    checkBackground(app)
-    """
-    FUNC
-    """
-    if event.key == "d":
-        app.func.debug = not app.func.debug
-    """
-    GAME
-    """
-    generateChunks(app)
+    app.func.keys.append(event.key)
+    if event.key == ".":
+        app._clearCanvas = not app._clearCanvas
+        print("Clear Canvas " + ("On" if app._clearCanvas else "Off"))
 
 def sizeChanged(app):
+    if app.width > 720:
+        return app.setSize(720, app.height)
+    if app.height > 480:
+        return app.setSize(app.width, 480)
     generateChunks(app)
+    app.game.loadChunks(app)
     checkBackground(app)
 
 def mouseMoved(app, event):
     app.func.mouseX = event.x
     app.func.mouseY = event.y
-    coords = getCoordsFromPix(app, event.x, event.y)
-    if coords:
-        app.func.hovering = getBlockFromCoords(app, coords[0], coords[1])
+    app.func.updateHovering(app)
 
 def mousePressed(app, event):
-    pass
+    if app.func.hovering and app.func.canInteract:
+        curInv = app.player.inventory[app.func.selectedInventory]
+        if app.func.hovering.breakable:
+            block = app.game.breakBlock(app, app.func.hovering)
+            app.player.pickUp(app, block)
+        elif curInv and curInv.canPlace and app.func.hovering.type == Blocks.AIR:
+            app.game.placeBlock(app, curInv, app.func.hovering)
+            curInv.count -= 1
+            if curInv.count == 0:
+                curInv = None
+            app.player.inventory[app.func.selectedInventory] = curInv
+        app.func.updateHovering(app)
 
 def drawChunk(app, canvas: tkinter.Canvas, chunk: Chunk):
     for r in range(chunk.x, chunk.x + app.CHUNK_SIZE):
-        for b in range(1, app.GROUND_LEVEL + 1):
+        for b in range(0, app.BUILD_HEIGHT):
+            if (r, b) not in chunk.blocks:
+                continue
             block = chunk.blocks[(r, b)]
-            x = ((block.x - app.player.x) * app.UNIT_WH) + (app.width // 2)
-            y = (app.height) - (block.y * app.UNIT_WH)
-            canvas.create_image(x, y, anchor="nw", image=getImage(app, block.type.name))
+            
+            drawBlock(app, block)
+            # canvas.create_rectangle(x, y, x + app.UNIT_WH, y + app.UNIT_WH, fill="blue")
             if r == chunk.x and app.func.debug:
+                x, y = getPixFromCoords(app, block.x, block.y)
                 canvas.create_rectangle(x, 0, x + (app.CHUNK_SIZE * app.UNIT_WH), app.height,
                             outline=("red" if chunk.x == app.game.getChunk(app, app.player.chunk).x else "black"))
-    if app.func.hovering:
-        block = app.func.hovering
-        x = ((block.x - app.player.x) * app.UNIT_WH) + (app.width // 2)
-        y = (app.height) - (block.y * app.UNIT_WH)
-        canvas.create_rectangle(x, y,
-                                x + app.UNIT_WH, y + app.UNIT_WH, outline="#00ff00")
 
 def drawGame(app, canvas: tkinter.Canvas):
     canvas.create_rectangle(0, 0, app.width, app.height,
                             fill=colors[int(app.game.time)])
-    chunksOnScreen = int(app.width / (app.CHUNK_SIZE * app.UNIT_WH)) + 3
-    startChunkIndex = int(app.player.chunk - (chunksOnScreen / 2)) + 1
+
     for bgX in app.game.bgX:
-        canvas.create_image(bgX, app.height - ((app.GROUND_LEVEL + 4) * app.UNIT_WH), anchor="e", image=app.background)
-    for chunk_i in range(startChunkIndex, chunksOnScreen + startChunkIndex):
-        drawChunk(app, canvas, app.game.getChunk(app, chunk_i))
+        groundLevel = app.height - app.GROUND_LEVEL * app.UNIT_WH
+        modifiedLevel = getPixY(app, app.GROUND_LEVEL) - (2 * app.UNIT_WH)
+        canvas.create_image(bgX, (groundLevel + modifiedLevel) / 2, 
+                            anchor="e", image=app.background)
+    for chunk in app.game.loaded:
+        drawChunk(app, canvas, chunk)
+    if app.func.hovering:
+        block = app.func.hovering
+        x, y = getPixFromCoords(app, block.x, block.y)
+        if not app.func.canInteract:
+            outline = "#929292"
+        else:
+            outline = "#F4AC38"
+        canvas.create_rectangle(x, y,
+                                x + app.UNIT_WH, y + app.UNIT_WH, outline=outline)
 
 def drawPlayer(app, canvas: tkinter.Canvas):
-    _, y = getPixFromCoords(app, app.player.x, app.player.y)
     x = app.width / 2
-    canvas.create_image(x, y + (app.UNIT_WH / 2), image=app.player.getSprite(), anchor="sw")
+    y = app.height * 0.6 + app.UNIT_WH
+    canvas.create_image(x, y, image=app.player.getSprite(), anchor="s")
 
 def drawDebug(app, canvas: tkinter.Canvas):
     blockCoords = getCoordsFromPix(app, app.func.mouseX, app.func.mouseY)
-    orient = '>' if app.player.orient == 1 else '<'
-    canvas.create_text(5, 10, text=f"G: {int(app.game.time)}", anchor="nw")
-    canvas.create_text(5, 30,
-                       text=f'P: ({app.player.x}, {app.player.y}) {app.player.chunk} {orient}',
-                       fill="#000000", anchor="w")
+    canvas.create_text(5, 10, text=f"G: {int(app.game.time)}", anchor="nw",
+                       font=app.debugFont, fill="#9A9A9A")
+    canvas.create_text(5, 30, text=f'TPS: {round(1 / (time() - app.lastTime), 3)}',
+                       anchor="w", font=app.debugFont, fill="#9A9A9A")
+    canvas.create_text(5, 50,
+                       text=f'P: ({round(app.player.x, 4)}, {round(app.player.y, 4)}) ({round(app.player.dx, 4)}, {round(app.player.dy, 4)}) {app.player.chunk}',
+                       fill="#9A9A9A",font=app.debugFont, anchor="w")
+    canvas.create_text(5, 70,
+                        text=f'M: ({app.func.mouseX}, {app.func.mouseY})',
+                        fill="#9A9A9A",font=app.debugFont, anchor="w")
     if blockCoords:
         block = getBlockFromCoords(app, blockCoords[0], blockCoords[1])
-        canvas.create_text(5, 50,
-                        text=f'M: ({app.func.mouseX}, {app.func.mouseY})',
-                        fill="#000000", anchor="w")
         if block:
-            canvas.create_text(5, 70,
-                       text=f'B: ({block.x}, {block.y}) {block.type.name} {block.chunk}',
-                       fill="#000000", anchor="w")
+            canvas.create_text(5, 90,
+                       text=f'B: ({block.x}, {block.y}) {block.type.name} {block.chunkInd}',
+                       fill="#9A9A9A",font=app.debugFont, anchor="w")
+
+def drawHotbar(app, canvas: tkinter.Canvas):
+    width = 9 * 28 + 40
+    itemWidth = int((width - 40) / 9)
+    for i, item in enumerate(app.player.inventory):
+        x = 8 + (i * (itemWidth + 4))
+        selected = app.func.selectedInventory == i
+        if selected:
+            borderWidth = 2
+        else:
+            borderWidth = 0
+        left = app.width - width - 12 + x
+        canvas.create_rectangle(left, 16,
+                                left + itemWidth, 16 + itemWidth, width=borderWidth,
+                                fill="#965816", outline="#C79355")
+        if item:
+            canvas.create_image(left + 4 + (itemWidth / 2), 16 + (itemWidth / 2),
+                                image=getImage(app, item.name, (itemWidth - 2, itemWidth - 2)))
+        canvas.create_text(left + 4, 10, anchor="nw", text=item.count if item else "",
+                           font=app.smallFont, fill="#E09A4F")
+
 def redrawAll(app, canvas:tkinter.Canvas):
     drawGame(app, canvas)
     drawPlayer(app, canvas)
     if app.func.debug:
         drawDebug(app, canvas)
+    drawHotbar(app, canvas)
 
 def timerFired(app):
     """
     PLAYER
     """
-    if app.player.falling != 0:
-        app.player.y = round(app.player.y - (app.player.falling - 0.15), 5)
-        app.player.falling += 0.01
-        if isOnGround(app):
-            app.player.y = getGround(app, roundHalfUp(app.player.x))
-            app.player.falling = 0
+    app.lastTime = time()
+    app.player.update(app)
     """
     GAME
     """
     app.game.time = round((app.game.time + 0.01) % 23, 2)
+    """
+    FUNC
+    """
+    app.func.handleKeys(app)
 
 def main():
-    runApp(width=500, height=500, title="Terraria")
+    runApp(width=500, height=500, title="Terraria", mvcCheck=False)
     
 if __name__ == "__main__":
     main()
