@@ -8,7 +8,6 @@ from items import *
 class Chunk:
     def __init__(self, app, x, chunkI):
         self.blocks = {}
-        self.images = {}
         self.x = x
         self.index = chunkI
         for i in range(app.CHUNK_SIZE):
@@ -57,22 +56,19 @@ class Chunk:
         if (block.x, block.y - 1) not in self.blocks:
             self.blocks[(block.x, block.y - 1)] = Air(block.x, block.y - 1,
                                                         self.index)
-            
+
+    def load(self, app, canvas):
+        for b in self.blocks:
+            block = self.blocks[b]
+            if not block.image:
+                block.load(app, canvas)
+
     def __eq__(self, other):
         return self.index == other.index
     def __gt__(self, other):
         return self.index > other.index
     def __str__(self):
         return f'I:{self.index} X:{self.x}'
-    
-    def isLoaded(self):
-        return len(self.images) == len(self.blocks)
-
-    def load(self, app):
-        if len(self.images) != len(self.blocks):
-            if not app._clearCanvas:
-                for block in self.blocks:
-                    drawBlock(app, self.blocks[block])
 
 class Game:
     def __init__(self, app):
@@ -110,15 +106,13 @@ class Game:
             if chunk.x == x:
                 return ci
 
-    def loadChunks(self, app):
+    def loadChunks(self, app, canvas):
         chunksOnScreen = int(app.width / (app.CHUNK_SIZE * app.UNIT_WH)) + 2
         startChunkIndex = app.player.chunk - math.floor(chunksOnScreen / 2)
         endChunkIndex = startChunkIndex + chunksOnScreen
         self.loaded = [self.chunks[i] for i in self.chunks if startChunkIndex <= i <= endChunkIndex]
         for chunk in self.loaded:
-            if not chunk.isLoaded():
-                print("not loaded")
-                chunk.load(app)
+            chunk.load(app, canvas)
     
     def breakBlock(self, app, block: Block):
         chunk = self.getChunk(app, block.chunkInd)
@@ -177,9 +171,7 @@ class Player(Entity):
     def checkForCollision(self, app):
         blockLeft = getBlockFromCoords(app, math.floor(self.x) - 1, math.ceil(self.y))
         blockRight = getBlockFromCoords(app, math.ceil(self.x), math.ceil(self.y))
-        blockCent = getBlockFromCoords(app, int(self.x), int(self.y + 1))
-        movingLeft = self.dx < 0
-        movingRight = self.dx > 0
+        blockTop = getBlockFromCoords(app, int(self.x), int(self.y + 1))
         selfCoords = getPixFromCoords(app, self.x + self.dx, self.y)
         
         # Right Collision
@@ -193,6 +185,11 @@ class Player(Entity):
             if blockLeft and blockLeft.solid:
                 self.dx = 0
                 self.x = blockLeft.x + 1.1
+        
+        # Top Collision
+        if self.dy < 0 and blockTop and blockTop.solid:
+            self.dy = 0
+            self.y = blockTop.y - 1
         
         # Gravity Collision
         if isOnGround(app) and self.dy >= 0:
@@ -237,6 +234,7 @@ class Functionality:
         self.mouseX = 0
         self.mouseY = 0
         self.hovering = None
+        self.hoveringRect = None
         self.debug = True
         self.selectedInventory = 0
         self.keys = []
@@ -280,8 +278,8 @@ class Functionality:
             self.handleKey(app, self.keys[0])
             self.keys.pop(0)
     
-    def updateHovering(self, app):
-        coords = getCoordsFromPix(app, self.mouseX, self.mouseY)
+    def updateHovering(self, app, event):
+        coords = getCoordsFromPix(app, event.x, event.y)
         if coords:
             app.func.hovering = getBlockFromCoords(app, coords[0], coords[1])
 
@@ -292,6 +290,6 @@ class Functionality:
             onPlayer = int(app.func.hovering.x) == int(app.player.x) and int(app.func.hovering.y) == int(app.player.y)
 
             isBedrock = app.func.hovering.type == Blocks.BEDROCK
-            app.func.canInteract = (not onPlayer) and distance < 4 and (not isBedrock)
+            app.func.canInteract = ((not onPlayer) and distance < 4 and (not isBedrock)) or self.debug
         else:
             app.func.hovering = None

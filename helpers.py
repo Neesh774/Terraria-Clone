@@ -40,7 +40,7 @@ def isOnGround(app):
     return False
 
 def getCoordsFromPix(app, xPix, yPix):
-    blockY = int(-(yPix - app.height * 0.6) / app.UNIT_WH) + app.player.y
+    blockY = math.ceil(-(yPix - app.height * 0.6) / app.UNIT_WH) + app.player.y
     for chunk in app.game.loaded:
         for b in range(app.CHUNK_SIZE):
             if (b + chunk.x, blockY) in chunk.blocks:
@@ -53,7 +53,7 @@ def getPixFromCoords(app, x, y):
     return getPixX(app, x), getPixY(app, y)
 
 def getPixX(app, x):
-    return ((x - app.player.x - 0.4) * app.UNIT_WH) + (app.width // 2)
+    return ((x - app.player.x) * app.UNIT_WH) + (app.width // 2)
 
 def getPixY(app, y):
     return (app.height * 0.6) + ((app.player.y - y) * app.UNIT_WH)
@@ -72,30 +72,31 @@ def generateChunks(app):
     if max(app.game.loaded).index > max(app.game.chunks.values()).index - 2:
         app.game.generateChunk(app, True)
 
-def drawBlock(app, block):
-    canvas = app._canvas
-    chunk = app.game.getChunk(app, block.chunkInd)
+def drawBlock(app, block, canvas):
+    x, y = getPixFromCoords(app, block.x, block.y)
+
+    if app._clearCanvas:
+        image = getImage(app, block.type.name)
+        if image != None:
+            canvas.create_image(x, y, anchor="nw", image=image)
+        
+        if app.func.hovering and app.func.hovering == block:
+            if not app.func.canInteract:
+                outline = "#929292"
+            else:
+                outline = "#F4AC38"
+            app.func.hoveringRect = canvas.create_rectangle(x, y, x + app.UNIT_WH, y + app.UNIT_WH,
+                                    outline=outline)
+
+def moveBlock(app, block, canvas):
     x, y = getPixFromCoords(app, block.x, block.y)
     if block.type == Blocks.AIR:
         return
-    
-    if app._clearCanvas:
-        image = getImage(app, block.type.name)
-        if image == None:
-            return
-        canvas.create_image(x, y, anchor="nw", image=image)
-    else:
-        # use cached image
-        if (x, y) in chunk.images:
-            image = chunk.images[(x, y)]
-            canvas.moveto(image, x, y)
-        else: # create new image in cache
-            image = getImage(app, block.type.name)
-            if image == None:
-                return
-            chunk.images[(x, y)] = canvas.create_image(x, y, anchor="nw", image=image)
-            return chunk.images[(x, y)]
-    
+    image = block.image
+    if image == None:
+        return
+    canvas.moveto(image, x, y)
+
 def checkBackground(app):
     if min(app.game.bgX) > 0: # Left
             app.game.bgX = [0] + app.game.bgX
@@ -115,7 +116,7 @@ def roundHalfUp(d):  # helper-fn
     # https://docs.python.org/3/library/decimal.html#rounding-modes
     return int(decimal.Decimal(d).to_integral_value(rounding=rounding))
 
-def getImage(app, name, resize=None):
+def getImage(app, name):
     if name not in app.images:
         return None
     img = copy.copy(app.images[name])

@@ -4,9 +4,7 @@ import tkinter
 
 from PIL import Image,ImageTk
 from cmu_112_graphics import *
-import random
 from enum import Enum
-import decimal
 import os
 from assets.colors import colors
 
@@ -36,7 +34,7 @@ def appStarted(app):
         app.images[f[:-4]] = Image.open("assets/blocks/" + f).resize((app.UNIT_WH, app.UNIT_WH))
     app.player = Player(app)
     app.game = Game(app)
-    app.game.loadChunks(app)
+    # app.game.loadChunks(app)
     app.func = Functionality(app)
     app.lastTime = time()
     checkBackground(app)
@@ -58,13 +56,12 @@ def sizeChanged(app):
     if app.height > 480:
         return app.setSize(app.width, 480)
     generateChunks(app)
-    app.game.loadChunks(app)
     checkBackground(app)
 
 def mouseMoved(app, event):
     app.func.mouseX = event.x
     app.func.mouseY = event.y
-    app.func.updateHovering(app)
+    app.func.updateHovering(app, event)
 
 def mousePressed(app, event):
     if app.func.hovering and app.func.canInteract:
@@ -78,7 +75,7 @@ def mousePressed(app, event):
             if curInv.count == 0:
                 curInv = None
             app.player.inventory[app.func.selectedInventory] = curInv
-        app.func.updateHovering(app)
+    app.func.updateHovering(app, event)
 
 def drawChunk(app, canvas: tkinter.Canvas, chunk: Chunk):
     for r in range(chunk.x, chunk.x + app.CHUNK_SIZE):
@@ -87,10 +84,9 @@ def drawChunk(app, canvas: tkinter.Canvas, chunk: Chunk):
                 continue
             block = chunk.blocks[(r, b)]
             
-            drawBlock(app, block)
-            # canvas.create_rectangle(x, y, x + app.UNIT_WH, y + app.UNIT_WH, fill="blue")
+            drawBlock(app, block, canvas)
             if r == chunk.x and app.func.debug:
-                x, y = getPixFromCoords(app, block.x, block.y)
+                x, _ = getPixFromCoords(app, block.x, block.y)
                 canvas.create_rectangle(x, 0, x + (app.CHUNK_SIZE * app.UNIT_WH), app.height,
                             outline=("red" if chunk.x == app.game.getChunk(app, app.player.chunk).x else "black"))
 
@@ -105,23 +101,15 @@ def drawGame(app, canvas: tkinter.Canvas):
                             anchor="e", image=app.background)
     for chunk in app.game.loaded:
         drawChunk(app, canvas, chunk)
-    if app.func.hovering:
-        block = app.func.hovering
-        x, y = getPixFromCoords(app, block.x, block.y)
-        if not app.func.canInteract:
-            outline = "#929292"
-        else:
-            outline = "#F4AC38"
-        canvas.create_rectangle(x, y,
-                                x + app.UNIT_WH, y + app.UNIT_WH, outline=outline)
+    if app.func.hoveringRect:
+        canvas.lift(app.func.hoveringRect)
 
 def drawPlayer(app, canvas: tkinter.Canvas):
     x = app.width / 2
     y = app.height * 0.6 + app.UNIT_WH
-    canvas.create_image(x, y, image=app.player.getSprite(), anchor="s")
+    canvas.create_image(x, y, image=app.player.getSprite(), anchor="sw")
 
 def drawDebug(app, canvas: tkinter.Canvas):
-    blockCoords = getCoordsFromPix(app, app.func.mouseX, app.func.mouseY)
     canvas.create_text(5, 10, text=f"G: {int(app.game.time)}", anchor="nw",
                        font=app.debugFont, fill="#9A9A9A")
     canvas.create_text(5, 30, text=f'TPS: {round(1 / (time() - app.lastTime), 3)}',
@@ -132,8 +120,8 @@ def drawDebug(app, canvas: tkinter.Canvas):
     canvas.create_text(5, 70,
                         text=f'M: ({app.func.mouseX}, {app.func.mouseY})',
                         fill="#9A9A9A",font=app.debugFont, anchor="w")
-    if blockCoords:
-        block = getBlockFromCoords(app, blockCoords[0], blockCoords[1])
+    if app.func.hovering:
+        block = app.func.hovering
         if block:
             canvas.create_text(5, 90,
                        text=f'B: ({block.x}, {block.y}) {block.type.name} {block.chunkInd}',
@@ -155,11 +143,12 @@ def drawHotbar(app, canvas: tkinter.Canvas):
                                 fill="#965816", outline="#C79355")
         if item:
             canvas.create_image(left + 4 + (itemWidth / 2), 16 + (itemWidth / 2),
-                                image=getImage(app, item.name, (itemWidth - 2, itemWidth - 2)))
+                                image=getImage(app, item.name))
         canvas.create_text(left + 4, 10, anchor="nw", text=item.count if item else "",
-                           font=app.smallFont, fill="#E09A4F")
+                           font=app.smallFont, fill="#38332F")
 
 def redrawAll(app, canvas:tkinter.Canvas):
+    app.game.loadChunks(app, canvas)
     drawGame(app, canvas)
     drawPlayer(app, canvas)
     if app.func.debug:
@@ -167,10 +156,10 @@ def redrawAll(app, canvas:tkinter.Canvas):
     drawHotbar(app, canvas)
 
 def timerFired(app):
+    app.lastTime = time()
     """
     PLAYER
     """
-    app.lastTime = time()
     app.player.update(app)
     """
     GAME
