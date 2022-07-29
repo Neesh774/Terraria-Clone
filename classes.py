@@ -10,6 +10,7 @@ class Chunk:
         self.blocks = {}
         self.x = x
         self.index = chunkI
+        self.items = {}
         for i in range(app.CHUNK_SIZE):
             row_ground_level = app.GROUND_LEVEL
             row_grass_level = app.GRASS_LEVEL + random.randint(0, 1)
@@ -62,6 +63,10 @@ class Chunk:
             block = self.blocks[b]
             if not block.image:
                 block.load(app, canvas)
+    
+    def update(self, app):
+        for item in self.items:
+            item.update(app)
 
     def __eq__(self, other):
         return self.index == other.index
@@ -117,7 +122,7 @@ class Game:
     def breakBlock(self, app, block: Block):
         chunk = self.getChunk(app, block.chunkInd)
         block = chunk.blocks[(block.x, block.y)]
-        item = Item(block.type.name, canPlace=True)
+        item = InventoryItem(block.type.name, canPlace=True)
         chunk.blocks[(block.x, block.y)] = Air(block.x, block.y, block.chunkInd)
         chunk.generateAir(app, block)
         return item
@@ -138,7 +143,7 @@ class Player(Entity):
         self.dx = 0
         self.dy = 0
         self.inventory = [None] * 9
-        self.inventory[0] = Item("DIRT", app.STACK_MAX, True)
+        self.inventory[0] = InventoryItem("DIRT", app.STACK_MAX, True)
         self.orient = 1
         self.health = 20
         self.image = Image.open("assets/boris.png").resize((int(app.UNIT_WH * 0.8), int(app.UNIT_WH * 0.8)))
@@ -166,7 +171,10 @@ class Player(Entity):
         for _ in range(abs(int(self.dx / 0.25))):
             parallax = 1 if self.dx < 0 else -1
             app.game.bgX = [app.game.bgX[bg] + parallax for bg in range(len(app.game.bgX))]
-        self.dx *= 0.6
+        if app.func.goodGraphics:
+            self.dx *= 0.6
+        else:
+            self.dx *= 0.7
     
     def checkForCollision(self, app):
         blockLeft = getBlockFromCoords(app, math.floor(self.x) - 1, math.ceil(self.y))
@@ -199,7 +207,10 @@ class Player(Entity):
             self.y = max(groundLeft, groundRight)
     
     def gravity(self, app):
-        self.dy += 0.2
+        if app.func.goodGraphics:
+            self.dy += 0.2
+        else:
+            self.dy += 0.1
     
     def moveLeft(self, app, dx=-0.8):
         ground = getGround(app, math.floor(self.x)) - 1
@@ -214,6 +225,7 @@ class Player(Entity):
             chunkIndex = app.game.getChunkIndex(min(app.game.loaded).x - app.CHUNK_SIZE)
             app.game.loaded.insert(0, app.game.getChunk(app, chunkIndex))
         self.chunk = newChunk
+        app.func.updateHovering(app)
     
     def moveRight(self, app, dx=0.8):
         ground = getGround(app, math.ceil(self.x)) - 1
@@ -228,6 +240,7 @@ class Player(Entity):
             chunkIndex = app.game.getChunkIndex(max(app.game.loaded).x + app.CHUNK_SIZE)
             app.game.loaded.append(app.game.getChunk(app, chunkIndex))
         self.chunk = newChunk
+        app.func.updateHovering(app)
 
 class Functionality:
     def __init__(self, app):
@@ -241,6 +254,8 @@ class Functionality:
         self.keysDelay = 10
         self.keysTimer = 0
         self.canInteract = False
+        self.holding = None
+        self.goodGraphics = False
     
     def handleKey(self, app, key):
         """
@@ -268,28 +283,43 @@ class Functionality:
         FUNC
         """
         if "/" == key:
-            app.func.debug = not app.func.debug
+            self.debug = not self.debug
         if key.isnumeric():
             key = int(key)
-            if key != 0: app.func.selectedInventory = key - 1
-    
+            if key != 0: self.selectedInventory = key - 1
+        if "g" == key:
+            self.goodGraphics = not self.goodGraphics
     def handleKeys(self, app):
         for _ in range(len(self.keys)):
             self.handleKey(app, self.keys[0])
             self.keys.pop(0)
     
-    def updateHovering(self, app, event):
-        coords = getCoordsFromPix(app, event.x, event.y)
+    def updateHovering(self, app):
+        coords = getCoordsFromPix(app, self.mouseX, self.mouseY)
         if coords:
-            app.func.hovering = getBlockFromCoords(app, coords[0], coords[1])
+            self.hovering = getBlockFromCoords(app, coords[0], coords[1])
 
             blockPix = coords[0], coords[1]
             playerPix = int(app.player.x), int(app.player.y)
             distance = math.dist(blockPix, playerPix)
 
-            onPlayer = int(app.func.hovering.x) == int(app.player.x) and int(app.func.hovering.y) == int(app.player.y)
+            onPlayer = int(self.hovering.x) == int(app.player.x) and int(self.hovering.y) == int(app.player.y)
 
             isBedrock = app.func.hovering.type == Blocks.BEDROCK
-            app.func.canInteract = ((not onPlayer) and distance < 4 and (not isBedrock)) or self.debug
+            self.canInteract = ((not onPlayer) and distance < 4 and (not isBedrock)) or self.debug
         else:
-            app.func.hovering = None
+            self.hovering = None
+    
+    def handleClick(self, app):
+        if self.hovering and self.canInteract:
+            curInv = app.player.inventory[self.selectedInventory]
+            if self.hovering.breakable:
+                block = app.game.breakBlock(app, self.hovering)
+                app.player.pickUp(app, block)
+            elif curInv and curInv.canPlace and self.hovering.type == Blocks.AIR:
+                app.game.placeBlock(app, curInv, self.hovering)
+                curInv.count -= 1
+                if curInv.count == 0:
+                    curInv = None
+                app.player.inventory[self.selectedInventory] = curInv
+        self.updateHovering(app)

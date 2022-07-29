@@ -76,17 +76,28 @@ def drawBlock(app, block, canvas):
     x, y = getPixFromCoords(app, block.x, block.y)
 
     if app._clearCanvas:
-        image = getImage(app, block.type.name)
-        if image != None:
-            canvas.create_image(x, y, anchor="nw", image=image)
-        
+
+        if app.func.goodGraphics:
+            image = getImage(app, block.type.name)
+            if image != None:
+                canvas.create_image(x, y, anchor="nw", image=image)
+        else:
+            if block.type.name != "AIR":
+                canvas.create_rectangle(x, y, x + app.UNIT_WH, y + app.UNIT_WH,
+                                    fill=block.color, width=0)
+
         if app.func.hovering and app.func.hovering == block:
             if not app.func.canInteract:
                 outline = "#929292"
             else:
                 outline = "#F4AC38"
+            if app.func.holding:
+                heldTime = time() - app.func.holding
+                width = heldTime / 0.1 * 5
+            else:
+                width = 1
             app.func.hoveringRect = canvas.create_rectangle(x, y, x + app.UNIT_WH, y + app.UNIT_WH,
-                                    outline=outline)
+                                    outline=outline, width=width)
 
 def moveBlock(app, block, canvas):
     x, y = getPixFromCoords(app, block.x, block.y)

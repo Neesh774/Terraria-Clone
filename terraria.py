@@ -61,21 +61,26 @@ def sizeChanged(app):
 def mouseMoved(app, event):
     app.func.mouseX = event.x
     app.func.mouseY = event.y
-    app.func.updateHovering(app, event)
+    app.func.updateHovering(app)
 
 def mousePressed(app, event):
     if app.func.hovering and app.func.canInteract:
         curInv = app.player.inventory[app.func.selectedInventory]
+
         if app.func.hovering.breakable:
-            block = app.game.breakBlock(app, app.func.hovering)
-            app.player.pickUp(app, block)
+            app.func.holding = time()
+
         elif curInv and curInv.canPlace and app.func.hovering.type == Blocks.AIR:
             app.game.placeBlock(app, curInv, app.func.hovering)
             curInv.count -= 1
             if curInv.count == 0:
                 curInv = None
+
             app.player.inventory[app.func.selectedInventory] = curInv
-    app.func.updateHovering(app, event)
+        app.func.updateHovering(app)
+
+def mouseReleased(app, event):
+    app.func.holding = None
 
 def drawChunk(app, canvas: tkinter.Canvas, chunk: Chunk):
     for r in range(chunk.x, chunk.x + app.CHUNK_SIZE):
@@ -169,6 +174,9 @@ def timerFired(app):
     FUNC
     """
     app.func.handleKeys(app)
+    if app.func.holding and time() - app.func.holding > 0.1:
+        app.func.handleClick(app)
+        app.func.holding = None
 
 def main():
     runApp(width=500, height=500, title="Terraria", mvcCheck=False)

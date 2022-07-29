@@ -1,7 +1,7 @@
 from helpers import *
 
 class Block:
-    def __init__(self, x, y, block: Blocks, chunkInd, solid = True, breakable = True):
+    def __init__(self, x, y, block: Blocks, chunkInd, solid = True, breakable = True, color="black"):
         self.x = x
         self.y = y
         self.type = block
@@ -9,6 +9,7 @@ class Block:
         self.solid = solid
         self.breakable = breakable
         self.image = None
+        self.color = color
         
     def load(self, app, canvas):
         image = getImage(app, self.type.name)
@@ -32,16 +33,17 @@ class Air(Block):
         
 class Grass(Block):
     def __init__(self, x, y, chunkInd):
-        super().__init__(x, y, Blocks.GRASS, chunkInd)
+        super().__init__(x, y, Blocks.GRASS, chunkInd, color="chartreuse4")
 
 class Dirt(Block):
     def __init__(self, x, y, chunkInd):
-        super().__init__(x, y, Blocks.DIRT, chunkInd)
+        super().__init__(x, y, Blocks.DIRT, chunkInd, color="tan4")
         
 class Stone(Block):
     def __init__(self, x, y, chunkInd):
-        super().__init__(x, y, Blocks.STONE, chunkInd)
+        super().__init__(x, y, Blocks.STONE, chunkInd, color="seashell4")
 
 class Bedrock(Block):
     def __init__(self, x, y, chunkInd):
-        super().__init__(x, y, Blocks.BEDROCK, chunkInd, solid=True, breakable=False)
+        super().__init__(x, y, Blocks.BEDROCK, chunkInd, solid=True, breakable=False,
+                         color="dark slate gray")
