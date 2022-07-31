@@ -1,9 +1,11 @@
 import copy
 import decimal
+from re import A
 from time import time
 from PIL import ImageTk
 import math
 from enum import Enum
+from settings import *
 
 class Blocks(Enum):
     AIR = -1
@@ -13,10 +15,61 @@ class Blocks(Enum):
     BEDROCK = 3
 
 class Entity:
-    def __init__(self, app):
-        self.x = 0
-        self.y = app.GROUND_LEVEL + 1
-        self.falling = 0
+    def __init__(self, x, y, dx = 0, dy = 0):
+        self.x = x
+        self.y = y
+        self.dx = dx
+        self.dy = dy
+
+    def updateWrapper(self, app, *args):
+        self.y -= self.dy
+        self.gravity(app)
+        self.checkForCollision(app)
+        self.x += self.dx
+        if app.func.goodGraphics:
+            self.dx *= 0.6
+        else:
+            self.dx *= 0.7
+        if abs(self.dx) < 0.005:
+            self.dx = 0
+        if hasattr(self, "update"):
+            self.update(app, *args)
+    
+    def gravity(self, app):
+        if app.func.goodGraphics:
+            self.dy += 0.15
+        else:
+            self.dy += 0.1
+
+    def checkForCollision(self, app):
+        blockLeft = getBlockFromCoords(app, math.floor(self.x) - 1, math.ceil(self.y))
+        blockRight = getBlockFromCoords(app, math.ceil(self.x), math.ceil(self.y))
+        blockTop = getBlockFromCoords(app, int(self.x), int(self.y + 1))
+        blockCenter = getBlockFromCoords(app, int(self.x), int(self.y))
+        
+        # Right Collision
+        if 0 < self.dx <= 1:
+            if blockRight and blockRight.solid:
+                self.dx = 0
+                self.x = blockRight.x - 0.9
+
+        # Left Collision
+        if -1 <= self.dx < 0:
+            if blockLeft and blockLeft.solid:
+                self.dx = 0
+                self.x = blockLeft.x + 1.1
+        
+        # Top Collision
+        if self.dy < 0 and blockTop and blockTop.solid:
+            self.dy = 0
+            self.y = blockTop.y - 1
+        
+        # Gravity Collision
+        if isOnGround(app, self.x, self.y) and self.dy >= 0:
+            self.dy = 0
+            groundLeft = getGround(app, math.floor(self.x), self.y)
+            groundRight = getGround(app, math.floor(self.x + 0.8), self.y)
+            self.y = max(groundLeft, groundRight)
 
 ###############################################################################
 # HELPER FUNCS
@@ -27,41 +80,40 @@ def almostEqual(d1, d2, epsilon=10**-7):  # helper-fn
 
 def getBlockFromCoords(app, x, y):
     for chunk in app.game.loaded:
-        if chunk.inChunk(app, x) and 0 <= y <= app.BUILD_HEIGHT and (x, y) in chunk.blocks:
+        if chunk.inChunk(app, x) and 0 <= y <= BUILD_HEIGHT and (x, y) in chunk.blocks:
             return chunk.blocks[(x, y)]
     return None
 
-def isOnGround(app):
-    groundLeft = getGround(app, math.floor(app.player.x))
-    groundRight = getGround(app, math.floor(app.player.x + 0.8))
-    y = app.player.y
+def isOnGround(app, x, y):
+    groundLeft = getGround(app, math.floor(x), y)
+    groundRight = getGround(app, math.floor(x + 0.8), y)
     if y - groundLeft <= 0.4 or y - groundRight <= 0.4:
         return True
     return False
 
 def getCoordsFromPix(app, xPix, yPix):
-    blockY = math.ceil(-(yPix - app.height * 0.6) / app.UNIT_WH) + app.player.y
+    blockY = math.ceil(-(yPix - app.height * 0.6) / UNIT_WH) + app.player.y
     for chunk in app.game.loaded:
-        for b in range(app.CHUNK_SIZE):
+        for b in range(CHUNK_SIZE):
             if (b + chunk.x, blockY) in chunk.blocks:
                 block = chunk.blocks[(b + chunk.x, blockY)]
-                blockX = ((block.x - app.player.x) * app.UNIT_WH) + (app.width // 2)
-                if blockX <= xPix and xPix < blockX + app.UNIT_WH:
+                blockX = ((block.x - app.player.x) * UNIT_WH) + (app.width // 2)
+                if blockX <= xPix and xPix < blockX + UNIT_WH:
                     return block.x, block.y
         
 def getPixFromCoords(app, x, y):
     return getPixX(app, x), getPixY(app, y)
 
 def getPixX(app, x):
-    return ((x - app.player.x) * app.UNIT_WH) + (app.width // 2)
+    return ((x - app.player.x) * UNIT_WH) + (app.width // 2)
 
 def getPixY(app, y):
-    return (app.height * 0.6) + ((app.player.y - y) * app.UNIT_WH)
+    return (app.height * 0.6) + ((app.player.y - y) * UNIT_WH)
 
-def getGround(app, x):
+def getGround(app, x, y):
     for chunk in app.game.loaded:
         if chunk.inChunk(app, x):
-            for r in range(math.ceil(app.player.y), -1, -1):
+            for r in range(math.ceil(y), -1, -1):
                 if (x, r) in chunk.blocks and chunk.blocks[(x, r)].solid:
                     return chunk.blocks[(x, r)].y + 1
     return -1
@@ -83,7 +135,7 @@ def drawBlock(app, block, canvas):
                 canvas.create_image(x, y, anchor="nw", image=image)
         else:
             if block.type.name != "AIR":
-                canvas.create_rectangle(x, y, x + app.UNIT_WH, y + app.UNIT_WH,
+                canvas.create_rectangle(x, y, x + UNIT_WH, y + UNIT_WH,
                                     fill=block.color, width=0)
 
         if app.func.hovering and app.func.hovering == block:
@@ -96,7 +148,7 @@ def drawBlock(app, block, canvas):
                 width = heldTime / 0.1 * 5
             else:
                 width = 1
-            app.func.hoveringRect = canvas.create_rectangle(x, y, x + app.UNIT_WH, y + app.UNIT_WH,
+            app.func.hoveringRect = canvas.create_rectangle(x, y, x + UNIT_WH, y + UNIT_WH,
                                     outline=outline, width=width)
 
 def moveBlock(app, block, canvas):
@@ -127,8 +179,10 @@ def roundHalfUp(d):  # helper-fn
     # https://docs.python.org/3/library/decimal.html#rounding-modes
     return int(decimal.Decimal(d).to_integral_value(rounding=rounding))
 
-def getImage(app, name):
+def getImage(app, name, resize = None):
     if name not in app.images:
         return None
     img = copy.copy(app.images[name])
+    if resize:
+        img = img.resize(resize)
     return ImageTk.PhotoImage(img)

@@ -7,6 +7,7 @@ from cmu_112_graphics import *
 from enum import Enum
 import os
 from assets.colors import colors
+from settings import *
 
 from classes import *
 from helpers import *
@@ -15,13 +16,6 @@ from helpers import *
 # MVC
 
 def appStarted(app):
-    app.GRASS_LEVEL = 9
-    app.DIRT_LEVEL = 4
-    app.UNIT_WH = 18
-    app.GROUND_LEVEL = int((app.height / 2) - 40) // app.UNIT_WH
-    app.CHUNK_SIZE = 8
-    app.BUILD_HEIGHT = 64
-    app.STACK_MAX = 32
     app.images = {}
     app.background = ImageTk.PhotoImage(Image.open("assets/background.png"))
     for f in os.listdir("assets"):
@@ -31,8 +25,8 @@ def appStarted(app):
     for f in os.listdir("assets/blocks"):
         if not f.endswith(".png"):
             continue
-        app.images[f[:-4]] = Image.open("assets/blocks/" + f).resize((app.UNIT_WH, app.UNIT_WH))
-    app.player = Player(app)
+        app.images[f[:-4]] = Image.open("assets/blocks/" + f).resize((UNIT_WH, UNIT_WH))
+    app.player = Player()
     app.game = Game(app)
     # app.game.loadChunks(app)
     app.func = Functionality(app)
@@ -83,8 +77,8 @@ def mouseReleased(app, event):
     app.func.holding = None
 
 def drawChunk(app, canvas: tkinter.Canvas, chunk: Chunk):
-    for r in range(chunk.x, chunk.x + app.CHUNK_SIZE):
-        for b in range(0, app.BUILD_HEIGHT):
+    for r in range(chunk.x, chunk.x + CHUNK_SIZE):
+        for b in range(0, BUILD_HEIGHT):
             if (r, b) not in chunk.blocks:
                 continue
             block = chunk.blocks[(r, b)]
@@ -92,18 +86,22 @@ def drawChunk(app, canvas: tkinter.Canvas, chunk: Chunk):
             drawBlock(app, block, canvas)
             if r == chunk.x and app.func.debug:
                 x, _ = getPixFromCoords(app, block.x, block.y)
-                canvas.create_rectangle(x, 0, x + (app.CHUNK_SIZE * app.UNIT_WH), app.height,
+                canvas.create_rectangle(x, 0, x + (CHUNK_SIZE * UNIT_WH), app.height,
                             outline=("red" if chunk.x == app.game.getChunk(app, app.player.chunk).x else "black"))
+    
+    for item in chunk.items:
+        item.draw(app, canvas)
 
 def drawGame(app, canvas: tkinter.Canvas):
     canvas.create_rectangle(0, 0, app.width, app.height,
                             fill=colors[int(app.game.time)])
 
     for bgX in app.game.bgX:
-        groundLevel = app.height - app.GROUND_LEVEL * app.UNIT_WH
-        modifiedLevel = getPixY(app, app.GROUND_LEVEL) - (2 * app.UNIT_WH)
-        canvas.create_image(bgX, (groundLevel + modifiedLevel) / 2, 
+        groundLevel = app.height - GROUND_LEVEL * UNIT_WH
+        modifiedLevel = getPixY(app, GROUND_LEVEL) - (2 * UNIT_WH)
+        canvas.create_image(bgX, (groundLevel + modifiedLevel) * 0.8, 
                             anchor="e", image=app.background)
+
     for chunk in app.game.loaded:
         drawChunk(app, canvas, chunk)
     if app.func.hoveringRect:
@@ -111,7 +109,7 @@ def drawGame(app, canvas: tkinter.Canvas):
 
 def drawPlayer(app, canvas: tkinter.Canvas):
     x = app.width / 2
-    y = app.height * 0.6 + app.UNIT_WH
+    y = app.height * 0.6 + UNIT_WH
     canvas.create_image(x, y, image=app.player.getSprite(), anchor="sw")
 
 def drawDebug(app, canvas: tkinter.Canvas):
@@ -165,11 +163,13 @@ def timerFired(app):
     """
     PLAYER
     """
-    app.player.update(app)
+    app.player.updateWrapper(app)
     """
     GAME
     """
     app.game.time = round((app.game.time + 0.01) % 23, 2)
+    for chunk in app.game.loaded:
+        chunk.update(app)
     """
     FUNC
     """

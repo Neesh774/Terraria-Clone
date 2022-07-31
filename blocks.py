@@ -29,7 +29,8 @@ class Block:
         return sameCoords and sameType
 class Air(Block):
     def __init__(self, x, y, chunkInd):
-        super().__init__(x, y, Blocks.AIR, chunkInd, solid=False, breakable=False)
+        super().__init__(x, y, Blocks.AIR, chunkInd, solid=False, breakable=False,
+                         color="grey2")
         
 class Grass(Block):
     def __init__(self, x, y, chunkInd):

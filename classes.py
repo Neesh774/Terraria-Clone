@@ -4,35 +4,36 @@ from PIL import Image,ImageTk
 from helpers import *
 from blocks import *
 from items import *
+from settings import *
 
 class Chunk:
     def __init__(self, app, x, chunkI):
         self.blocks = {}
         self.x = x
         self.index = chunkI
-        self.items = {}
-        for i in range(app.CHUNK_SIZE):
-            row_ground_level = app.GROUND_LEVEL
-            row_grass_level = app.GRASS_LEVEL + random.randint(0, 1)
-            row_dirt_level = app.DIRT_LEVEL + random.randint(0, 1)
+        self.items = []
+        for i in range(CHUNK_SIZE):
+            row_ground_level = GROUND_LEVEL
+            row_grass_level = GRASS_LEVEL + random.randint(0, 1)
+            row_dirt_level = DIRT_LEVEL + random.randint(0, 1)
             for r in range(row_ground_level, -1, -1):
-                if r == row_ground_level:
+                if r == row_ground_level: # 24
                     block = Air(x+i, r, chunkI)
-                elif r >= row_grass_level:
+                elif r >= row_grass_level: # 9
                     block = Grass(x+i, r, chunkI)
-                elif r > row_dirt_level:
+                elif r > row_dirt_level: # 4
                     block = Dirt(x+i, r, chunkI)
-                elif r > 0:
+                elif r > 0: # 0
                     block = Stone(x+i, r, chunkI)
-                else:
+                else: # -1
                     block = Bedrock(x+i, r, chunkI)
                 self.blocks[(x+i, r)] = block
                     
     def getRange(self, app):
-        return self.x, self.x + app.CHUNK_SIZE
+        return self.x, self.x + CHUNK_SIZE
     
     def inChunk(self, app, x):
-        return self.x <= x and x < self.x + app.CHUNK_SIZE
+        return self.x <= x and x < self.x + CHUNK_SIZE
     
     def generateAir(self, app, block: Block):
         if not self.inChunk(app, block.x - 1):
@@ -66,7 +67,14 @@ class Chunk:
     
     def update(self, app):
         for item in self.items:
-            item.update(app)
+            item.updateWrapper(app, self)
+            if item.x < self.x or item.x > self.x + CHUNK_SIZE:
+                self.items.remove(item)
+                if item.x < self.x:
+                    newChunk = app.game.getChunk(app, self.index - 1)
+                else:
+                    newChunk = app.game.getChunk(app, self.index + 1)
+                newChunk.items.append(item)
 
     def __eq__(self, other):
         return self.index == other.index
@@ -82,19 +90,21 @@ class Game:
         self.time = 0
         self.bgX = [0, app.background.width(), -app.background.width()]
         for i in range(20):
-            chunkX = (i - 10) * app.CHUNK_SIZE + 2
+            chunkX = (i - 10) * CHUNK_SIZE + 2
             self.chunks[i] = Chunk(app, chunkX, i)
+        
+        self.chunks[9].items.append(Item("carrot", self.chunks[9].x + 1, GROUND_LEVEL, 9))
         
         self.loaded = []
 
     def generateChunk(self, app, right):
         if right:
             highest = max(self.chunks)
-            chunk = Chunk(app, self.chunks[highest].x + app.CHUNK_SIZE, len(self.chunks))
+            chunk = Chunk(app, self.chunks[highest].x + CHUNK_SIZE, len(self.chunks))
             self.chunks[len(self.chunks)] = chunk
         else:
             lowest = min(self.chunks)
-            chunk = Chunk(app, self.chunks[lowest].x - app.CHUNK_SIZE, lowest - 1)
+            chunk = Chunk(app, self.chunks[lowest].x - CHUNK_SIZE, lowest - 1)
             self.chunks[lowest - 1] = chunk
             
     def getChunk(self, app, i) -> Chunk:
@@ -112,7 +122,7 @@ class Game:
                 return ci
 
     def loadChunks(self, app, canvas):
-        chunksOnScreen = int(app.width / (app.CHUNK_SIZE * app.UNIT_WH)) + 2
+        chunksOnScreen = int(app.width / (CHUNK_SIZE * UNIT_WH)) + 2
         startChunkIndex = app.player.chunk - math.floor(chunksOnScreen / 2)
         endChunkIndex = startChunkIndex + chunksOnScreen
         self.loaded = [self.chunks[i] for i in self.chunks if startChunkIndex <= i <= endChunkIndex]
@@ -136,17 +146,14 @@ class Game:
         chunk.generateAir(app, chunk.blocks[(block.x, block.y)])
 
 class Player(Entity):
-    def __init__(self, app):
+    def __init__(self):
         self.chunk = 9
-        self.x = 0.1
-        self.y = app.GROUND_LEVEL
-        self.dx = 0
-        self.dy = 0
-        self.inventory = [None] * 9
-        self.inventory[0] = InventoryItem("DIRT", app.STACK_MAX, True)
+
+        super().__init__(0.1, GROUND_LEVEL)
+        self.inventory = [InventoryItem("DIRT", STACK_MAX, True)] + [None] * 8
         self.orient = 1
         self.health = 20
-        self.image = Image.open("assets/boris.png").resize((int(app.UNIT_WH * 0.8), int(app.UNIT_WH * 0.8)))
+        self.image = Image.open("assets/boris.png").resize((int(UNIT_WH * 0.8), int(UNIT_WH * 0.8)))
     
     def getSprite(self):
         image = self.image.copy()
@@ -154,66 +161,36 @@ class Player(Entity):
             image = image.transpose(method=Image.Transpose.FLIP_LEFT_RIGHT)
         return ImageTk.PhotoImage(image)
 
-    def pickUp(self, app, item: Item):
+    def pickUp(self, app, item: InventoryItem):
         for i in range(len(self.inventory)):
             if not self.inventory[i]:
                 self.inventory[i] = item
                 return
-            elif self.inventory[i] == item and self.inventory[i].count < app.STACK_MAX:
-                self.inventory[i].count += 1
+            elif self.inventory[i] == item and self.inventory[i].count < STACK_MAX:
+                self.inventory[i].count += item.count
                 return
+        self.throwItem(app, item)
+    
+    def throwItem(self, app, item: InventoryItem, inInventory=False):
+        newX = self.x - 1
+        dx = -0.4
+        if self.orient == 1:
+            newX = self.x + 1
+            dx = 0.4
+        chunk = app.game.getChunk(app, self.chunk)
+        chunk.items.append(
+            item.toItem(self.chunk, newX, self.y, canPickUp=False, dx=dx, dy=-0.3)
+        )
+        if inInventory:
+            self.inventory[app.func.selectedInventory] = None
 
     def update(self, app):
-        self.y -= self.dy
-        self.gravity(app)
-        self.checkForCollision(app)
-        self.x += self.dx
         for _ in range(abs(int(self.dx / 0.25))):
             parallax = 1 if self.dx < 0 else -1
             app.game.bgX = [app.game.bgX[bg] + parallax for bg in range(len(app.game.bgX))]
-        if app.func.goodGraphics:
-            self.dx *= 0.6
-        else:
-            self.dx *= 0.7
-    
-    def checkForCollision(self, app):
-        blockLeft = getBlockFromCoords(app, math.floor(self.x) - 1, math.ceil(self.y))
-        blockRight = getBlockFromCoords(app, math.ceil(self.x), math.ceil(self.y))
-        blockTop = getBlockFromCoords(app, int(self.x), int(self.y + 1))
-        selfCoords = getPixFromCoords(app, self.x + self.dx, self.y)
-        
-        # Right Collision
-        if 0 < self.dx < 1:
-            if blockRight and blockRight.solid:
-                self.dx = 0
-                self.x = blockRight.x - 0.9
 
-        # Left Collision
-        if -1 < self.dx < 0:
-            if blockLeft and blockLeft.solid:
-                self.dx = 0
-                self.x = blockLeft.x + 1.1
-        
-        # Top Collision
-        if self.dy < 0 and blockTop and blockTop.solid:
-            self.dy = 0
-            self.y = blockTop.y - 1
-        
-        # Gravity Collision
-        if isOnGround(app) and self.dy >= 0:
-            self.dy = 0
-            groundLeft = getGround(app, math.floor(app.player.x))
-            groundRight = getGround(app, math.floor(app.player.x + 0.8))
-            self.y = max(groundLeft, groundRight)
-    
-    def gravity(self, app):
-        if app.func.goodGraphics:
-            self.dy += 0.2
-        else:
-            self.dy += 0.1
-    
     def moveLeft(self, app, dx=-0.8):
-        ground = getGround(app, math.floor(self.x)) - 1
+        ground = getGround(app, math.floor(self.x), self.y) - 1
         self.orient = -1
         self.dx = dx
         curBlock = getBlockFromCoords(app, math.floor(self.x) - 1, ground)
@@ -222,13 +199,13 @@ class Player(Entity):
         newChunk = curBlock.chunkInd
         if newChunk < self.chunk:
             app.game.loaded.pop(-1)
-            chunkIndex = app.game.getChunkIndex(min(app.game.loaded).x - app.CHUNK_SIZE)
+            chunkIndex = app.game.getChunkIndex(min(app.game.loaded).x - CHUNK_SIZE)
             app.game.loaded.insert(0, app.game.getChunk(app, chunkIndex))
         self.chunk = newChunk
         app.func.updateHovering(app)
     
     def moveRight(self, app, dx=0.8):
-        ground = getGround(app, math.ceil(self.x)) - 1
+        ground = getGround(app, math.ceil(self.x), self.y) - 1
         self.orient = 1
         self.dx = dx
         curBlock = getBlockFromCoords(app, math.ceil(self.x) + 1, ground)
@@ -237,7 +214,7 @@ class Player(Entity):
         newChunk = curBlock.chunkInd
         if newChunk > self.chunk:
             app.game.loaded.pop(0)
-            chunkIndex = app.game.getChunkIndex(max(app.game.loaded).x + app.CHUNK_SIZE)
+            chunkIndex = app.game.getChunkIndex(max(app.game.loaded).x + CHUNK_SIZE)
             app.game.loaded.append(app.game.getChunk(app, chunkIndex))
         self.chunk = newChunk
         app.func.updateHovering(app)
@@ -271,14 +248,18 @@ class Functionality:
         else:
             slow = 1
 
-        if "w" == key and isOnGround(app):
-            app.player.dy += -0.8 * slow
+        if "w" == key and isOnGround(app, app.player.x, app.player.y):
+            app.player.dy -= 0.8 * slow
         
         if "a" == key:
             app.player.moveLeft(app, -0.8 * slow)
         elif "d" == key:
             app.player.moveRight(app, 0.8 * slow)
         checkBackground(app)
+
+        if "q" == key:
+            app.player.throwItem(app, app.player.inventory[self.selectedInventory],
+                                 inInventory=True)
         """
         FUNC
         """
