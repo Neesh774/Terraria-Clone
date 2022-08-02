@@ -149,6 +149,30 @@ def drawHotbar(app, canvas: tkinter.Canvas):
                                 image=getImage(app, item.name))
         canvas.create_text(left + 4, 10, anchor="nw", text=item.count if item else "",
                            font=app.smallFont, fill="#38332F")
+    
+def drawSettings(app, canvas):
+    left = app.width * 0.1
+    top = app.height * 0.1
+    width = app.width * 0.8
+    height = app.height * 0.8
+    canvas.create_rectangle(left, top,
+                            left + width, top + height,
+                            fill="#C79355", outline="#9D7039", width=3)
+    for i, (action, keybind) in enumerate(KEYBINDS.items()):
+        cell_height = (height * 0.1) + 2
+        row = i * cell_height
+        leftCentX = app.width * 0.23
+        leftCentY = row + top + (cell_height - 8) / 2
+        canvas.create_text(leftCentX, leftCentY,
+                           text=action, font=("Arial", "16"), fill="#38332F",
+                           anchor="nw")
+        canvas.create_rectangle(app.width * 0.52, row + top + 20,
+                                app.width * 0.78, row + top + cell_height,
+                                fill="#9D7039", outline="#9D7039", width=3)
+        canvas.create_text(app.width * 0.65, row + top + 2 + (cell_height / 2),
+                           anchor="n",
+                           text=keybind, font=("Arial", "12"))
+
 
 def redrawAll(app, canvas:tkinter.Canvas):
     app.game.loadChunks(app, canvas)
@@ -157,6 +181,8 @@ def redrawAll(app, canvas:tkinter.Canvas):
     if app.func.debug:
         drawDebug(app, canvas)
     drawHotbar(app, canvas)
+    if app.func.keybinds:
+        drawSettings(app, canvas)
 
 def timerFired(app):
     app.lastTime = time()

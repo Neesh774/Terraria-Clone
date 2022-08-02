@@ -7,15 +7,24 @@ from items import *
 from settings import *
 
 class Chunk:
-    def __init__(self, app, x, chunkI):
+    def __init__(self, app, x, chunkI,
+                 startY = None, endY = None):
         self.blocks = {}
         self.x = x
         self.index = chunkI
         self.items = []
+        if startY:
+            self.endY = GROUND_LEVEL + random.randint(-TERRAIN_VARIATION, TERRAIN_VARIATION)
+            self.startY = startY
+        elif endY:
+            self.startY = GROUND_LEVEL + random.randint(-TERRAIN_VARIATION, TERRAIN_VARIATION)
+            self.endY = endY
+        terrain = generateTerrain(self.startY, self.endY)
         for i in range(CHUNK_SIZE):
-            row_ground_level = GROUND_LEVEL
-            row_grass_level = GRASS_LEVEL + random.randint(0, 1)
-            row_dirt_level = DIRT_LEVEL + random.randint(0, 1)
+            height = terrain[i]
+            row_ground_level = height
+            row_grass_level = height - GRASS_LEVEL - random.randint(0, 2)
+            row_dirt_level = height - DIRT_LEVEL - random.randint(-1, 1)
             for r in range(row_ground_level, -1, -1):
                 if r == row_ground_level: # 24
                     block = Air(x+i, r, chunkI)
@@ -86,25 +95,28 @@ class Chunk:
 class Game:
     def __init__(self, app):
         self.chunks = {}
-
         self.time = 0
         self.bgX = [0, app.background.width(), -app.background.width()]
+        startY = GROUND_LEVEL
         for i in range(20):
             chunkX = (i - 10) * CHUNK_SIZE + 2
-            self.chunks[i] = Chunk(app, chunkX, i)
-        
-        self.chunks[9].items.append(Item("carrot", self.chunks[9].x + 1, GROUND_LEVEL, 9))
-        
+            self.chunks[i] = Chunk(app, chunkX, i, startY=startY)
+            startY = self.chunks[i].endY
+
         self.loaded = []
 
     def generateChunk(self, app, right):
         if right:
             highest = max(self.chunks)
-            chunk = Chunk(app, self.chunks[highest].x + CHUNK_SIZE, len(self.chunks))
+            highest_chunk = self.chunks[highest]
+            chunk = Chunk(app, self.chunks[highest].x + CHUNK_SIZE, len(self.chunks),
+                          startY = highest_chunk.endY)
             self.chunks[len(self.chunks)] = chunk
         else:
             lowest = min(self.chunks)
-            chunk = Chunk(app, self.chunks[lowest].x - CHUNK_SIZE, lowest - 1)
+            lowest_chunk = self.chunks[lowest]
+            chunk = Chunk(app, self.chunks[lowest].x - CHUNK_SIZE, lowest - 1,
+                          endY = lowest_chunk.startY)
             self.chunks[lowest - 1] = chunk
             
     def getChunk(self, app, i) -> Chunk:
@@ -129,12 +141,13 @@ class Game:
         for chunk in self.loaded:
             chunk.load(app, canvas)
     
-    def breakBlock(self, app, block: Block):
+    def breakBlock(self, app, block: Block, drop=True):
         chunk = self.getChunk(app, block.chunkInd)
         block = chunk.blocks[(block.x, block.y)]
-        item = InventoryItem(block.type.name, canPlace=True)
+        item = Item(block.type.name, block.x, block.y, block.chunkInd, canPlace=True)
         chunk.blocks[(block.x, block.y)] = Air(block.x, block.y, block.chunkInd)
         chunk.generateAir(app, block)
+        chunk.items.append(item)
         return item
     
     def placeBlock(self, app, item: Item, block: Block):
@@ -172,17 +185,22 @@ class Player(Entity):
         self.throwItem(app, item)
     
     def throwItem(self, app, item: InventoryItem, inInventory=False):
-        newX = self.x - 1
-        dx = -0.4
-        if self.orient == 1:
-            newX = self.x + 1
-            dx = 0.4
-        chunk = app.game.getChunk(app, self.chunk)
-        chunk.items.append(
-            item.toItem(self.chunk, newX, self.y, canPickUp=False, dx=dx, dy=-0.3)
-        )
-        if inInventory:
-            self.inventory[app.func.selectedInventory] = None
+        if item:
+            newX = self.x - 1
+            dx = -0.4
+            if self.orient == 1:
+                newX = self.x + 1
+                dx = 0.4
+            chunk = app.game.getChunk(app, self.chunk)
+            chunk.items.append(
+                item.toItem(self.chunk, newX, self.y, count=1,  canPickUp=False, dx=dx, dy=-0.3)
+            )
+            if inInventory:
+                item.count -= 1
+                if item.count == 0:
+                    self.inventory[app.func.selectedInventory] = None
+                else:
+                    self.inventory[app.func.selectedInventory] = item
 
     def update(self, app):
         for _ in range(abs(int(self.dx / 0.25))):
@@ -233,12 +251,24 @@ class Functionality:
         self.canInteract = False
         self.holding = None
         self.goodGraphics = False
+        self.keybinds = False
     
     def handleKey(self, app, key):
         """
-        GAME
+        FUNC
         """
-        generateChunks(app)
+        if "k" == key or (self.keybinds and "Escape" == key):
+            self.keybinds = not self.keybinds
+        if self.keybinds:
+            return
+        if "/" == key:
+            self.debug = not self.debug
+        if key.isnumeric():
+            num = int(key)
+            if num != 0: self.selectedInventory = num - 1
+        if "g" == key:
+            self.goodGraphics = not self.goodGraphics
+
         """
         PLAYER
         """
@@ -260,16 +290,12 @@ class Functionality:
         if "q" == key:
             app.player.throwItem(app, app.player.inventory[self.selectedInventory],
                                  inInventory=True)
+
         """
-        FUNC
+        GAME
         """
-        if "/" == key:
-            self.debug = not self.debug
-        if key.isnumeric():
-            key = int(key)
-            if key != 0: self.selectedInventory = key - 1
-        if "g" == key:
-            self.goodGraphics = not self.goodGraphics
+        generateChunks(app)
+
     def handleKeys(self, app):
         for _ in range(len(self.keys)):
             self.handleKey(app, self.keys[0])
@@ -295,8 +321,7 @@ class Functionality:
         if self.hovering and self.canInteract:
             curInv = app.player.inventory[self.selectedInventory]
             if self.hovering.breakable:
-                block = app.game.breakBlock(app, self.hovering)
-                app.player.pickUp(app, block)
+                app.game.breakBlock(app, self.hovering)
             elif curInv and curInv.canPlace and self.hovering.type == Blocks.AIR:
                 app.game.placeBlock(app, curInv, self.hovering)
                 curInv.count -= 1

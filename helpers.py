@@ -5,6 +5,7 @@ from time import time
 from PIL import ImageTk
 import math
 from enum import Enum
+import random
 from settings import *
 
 class Blocks(Enum):
@@ -20,6 +21,7 @@ class Entity:
         self.y = y
         self.dx = dx
         self.dy = dy
+        self.gravityVal = 0.1
 
     def updateWrapper(self, app, *args):
         self.y -= self.dy
@@ -37,14 +39,14 @@ class Entity:
     
     def gravity(self, app):
         if app.func.goodGraphics:
-            self.dy += 0.15
+            self.dy += self.gravityVal * 1.5
         else:
-            self.dy += 0.1
+            self.dy += self.gravityVal
 
     def checkForCollision(self, app):
         blockLeft = getBlockFromCoords(app, math.floor(self.x) - 1, math.ceil(self.y))
         blockRight = getBlockFromCoords(app, math.ceil(self.x), math.ceil(self.y))
-        blockTop = getBlockFromCoords(app, int(self.x), int(self.y + 1))
+        blockTop = getBlockFromCoords(app, math.floor(self.x), int(self.y + 1))
         blockCenter = getBlockFromCoords(app, int(self.x), int(self.y))
         
         # Right Collision
@@ -186,3 +188,16 @@ def getImage(app, name, resize = None):
     if resize:
         img = img.resize(resize)
     return ImageTk.PhotoImage(img)
+
+def withinBounds(x1, y1, x2, y2, x, y):
+    return x1 <= x <= x2 and y1 <= y <= y2
+
+def generateTerrain(y1, y2, displace=1, length=0):
+    if 2**(length + 1) >= CHUNK_SIZE:
+        return [y1, y2]
+    displacement = random.randint(0, displace)
+    multiply = -1 if random.randint(0, 1) else 1
+    midpoint = int(((y1 + y2) / 2) + displacement * multiply)
+    length += 1
+    return (generateTerrain(y1, midpoint, int(displace * 0.5), length) +
+        generateTerrain(midpoint, y2, int(displace * 0.5), length))

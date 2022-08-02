@@ -7,8 +7,9 @@ class Item(Entity):
         self.count = count
         self.canPlace = canPlace
         self.chunkInd = chunk
+        self.gravityVal = 0.04
         if not canPickUp:
-            self.canPickUp = 5
+            self.canPickUp = 3
         else:
             self.canPickUp = 0
         super().__init__(x, y, dx=dx, dy=dy)
@@ -50,11 +51,11 @@ class InventoryItem():
         self.name = name
         self.count = count
         self.canPlace = canPlace
-    
-    def toItem(self, chunk, x, y, canPickUp=True, dx=0, dy=0):
-        return Item(self.name, x, y, chunk, count=self.count, canPlace=self.canPlace, canPickUp=canPickUp,
+
+    def toItem(self, chunk, x, y, canPickUp=True, dx=0, dy=0, count=1):
+        return Item(self.name, x, y, chunk, count=(count if count else self.count), canPlace=self.canPlace, canPickUp=canPickUp,
                     dx=dx, dy=dy)
-    
+
     def __eq__(self, other):
         return self.name == other.name
     def __str__(self):
