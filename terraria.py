@@ -95,12 +95,11 @@ def drawChunk(app, canvas: tkinter.Canvas, chunk: Chunk):
 def drawGame(app, canvas: tkinter.Canvas):
     canvas.create_rectangle(0, 0, app.width, app.height,
                             fill=colors[int(app.game.time)])
+    canvas.create_rectangle(0, app.height * 0.5, app.width, app.height,
+                            fill="#2D404F")
 
     for bgX in app.game.bgX:
-        groundLevel = app.height - GROUND_LEVEL * UNIT_WH
-        modifiedLevel = getPixY(app, GROUND_LEVEL) - (2 * UNIT_WH)
-        canvas.create_image(bgX, (groundLevel + modifiedLevel) * 0.8, 
-                            anchor="e", image=app.background)
+        canvas.create_image(bgX, app.height * 0.5, image=app.background, anchor="e")
 
     for chunk in app.game.loaded:
         drawChunk(app, canvas, chunk)

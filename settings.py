@@ -1,4 +1,4 @@
-GROUND_LEVEL = 24
+GROUND_LEVEL = 36
 GRASS_LEVEL = 2 # thickness of grass strips
 DIRT_LEVEL = 10 # thickness of dirt strips
 UNIT_WH = 18

@@ -31,7 +31,7 @@ class Entity:
         if app.func.goodGraphics:
             self.dx *= 0.6
         else:
-            self.dx *= 0.7
+            self.dx *= 0.6
         if abs(self.dx) < 0.005:
             self.dx = 0
         if hasattr(self, "update"):
@@ -51,13 +51,25 @@ class Entity:
         
         # Right Collision
         if 0 < self.dx <= 1:
-            if blockRight and blockRight.solid:
+            topBlock = blockTop and blockTop.solid
+            diagBlock = getBlockFromCoords(app, math.ceil(self.x), math.ceil(self.y) + 1)
+            freeDiagBlock = not diagBlock or not diagBlock.solid
+            if blockRight and blockRight.solid and not topBlock and freeDiagBlock:
+                self.x = blockRight.x
+                self.y = blockRight.y + 1
+            elif blockRight and blockRight.solid:
                 self.dx = 0
                 self.x = blockRight.x - 0.9
 
         # Left Collision
         if -1 <= self.dx < 0:
-            if blockLeft and blockLeft.solid:
+            topBlock = blockTop and blockTop.solid
+            diagBlock = getBlockFromCoords(app, math.floor(self.x) - 1, math.ceil(self.y) + 1)
+            freeDiagBlock = not diagBlock or not diagBlock.solid
+            if blockLeft and blockLeft.solid and not topBlock and freeDiagBlock:
+                self.x = blockLeft.x + 1
+                self.y = blockLeft.y + 1
+            elif blockLeft and blockLeft.solid:
                 self.dx = 0
                 self.x = blockLeft.x + 1.1
         
@@ -139,6 +151,9 @@ def drawBlock(app, block, canvas):
             if block.type.name != "AIR":
                 canvas.create_rectangle(x, y, x + UNIT_WH, y + UNIT_WH,
                                     fill=block.color, width=0)
+            elif belowSurface(app, block):
+                canvas.create_rectangle(x, y, x + UNIT_WH, y + UNIT_WH,
+                                    fill="grey13", width=0)
 
         if app.func.hovering and app.func.hovering == block:
             if not app.func.canInteract:
@@ -201,3 +216,12 @@ def generateTerrain(y1, y2, displace=1, length=0):
     length += 1
     return (generateTerrain(y1, midpoint, int(displace * 0.5), length) +
         generateTerrain(midpoint, y2, int(displace * 0.5), length))
+    
+def belowSurface(app, block):
+    chunk = app.game.getChunk(app, block.chunkInd)
+    for i in range(BUILD_HEIGHT, block.y, -1):
+        if (block.x, i) in chunk.blocks and chunk.blocks[(block.x, i)].solid:
+            return True
+    if block.y <= GROUND_LEVEL - GRASS_LEVEL - TERRAIN_VARIATION:
+        return True
+    return False

@@ -8,17 +8,19 @@ from settings import *
 
 class Chunk:
     def __init__(self, app, x, chunkI,
-                 startY = None, endY = None):
+                 startY = None, endY = None, closePoints = []):
         self.blocks = {}
         self.x = x
         self.index = chunkI
         self.items = []
+        self.points = []
         if startY:
             self.endY = GROUND_LEVEL + random.randint(-TERRAIN_VARIATION, TERRAIN_VARIATION)
             self.startY = startY
         elif endY:
             self.startY = GROUND_LEVEL + random.randint(-TERRAIN_VARIATION, TERRAIN_VARIATION)
             self.endY = endY
+
         terrain = generateTerrain(self.startY, self.endY)
         for i in range(CHUNK_SIZE):
             height = terrain[i]
@@ -37,6 +39,24 @@ class Chunk:
                 else: # -1
                     block = Bedrock(x+i, r, chunkI)
                 self.blocks[(x+i, r)] = block
+        
+        for i in range(random.randint(0, 7)):
+            point = (random.randint(self.x, self.x + CHUNK_SIZE),
+                        random.randint(0, GROUND_LEVEL - GRASS_LEVEL - 5))
+            radius = random.randint(2, 4)
+            self.points.append({
+                "coords": point,
+                "radius": radius
+            })
+        
+        for pointObj in closePoints + self.points:
+            point = pointObj["coords"]
+            rad = pointObj["radius"]
+            for i in range(point[0] - rad, point[0] + rad):
+                for j in range(point[1] - rad, point[1] + rad):
+                    dist = math.sqrt((i - point[0])**2 + (j - point[1])**2)
+                    if (i, j) in self.blocks and dist <= rad and self.blocks[(i, j)].breakable:
+                        self.blocks[(i, j)] = Air(i, j, chunkI)
                     
     def getRange(self, app):
         return self.x, self.x + CHUNK_SIZE
@@ -100,7 +120,11 @@ class Game:
         startY = GROUND_LEVEL
         for i in range(20):
             chunkX = (i - 10) * CHUNK_SIZE + 2
-            self.chunks[i] = Chunk(app, chunkX, i, startY=startY)
+            if i - 1 in self.chunks:
+                closePoints = self.chunks[i - 1].points
+            else:
+                closePoints = []
+            self.chunks[i] = Chunk(app, chunkX, i, startY=startY, closePoints=closePoints)
             startY = self.chunks[i].endY
 
         self.loaded = []
@@ -110,13 +134,13 @@ class Game:
             highest = max(self.chunks)
             highest_chunk = self.chunks[highest]
             chunk = Chunk(app, self.chunks[highest].x + CHUNK_SIZE, len(self.chunks),
-                          startY = highest_chunk.endY)
+                          startY = highest_chunk.endY, closePoints=highest_chunk.points)
             self.chunks[len(self.chunks)] = chunk
         else:
             lowest = min(self.chunks)
             lowest_chunk = self.chunks[lowest]
             chunk = Chunk(app, self.chunks[lowest].x - CHUNK_SIZE, lowest - 1,
-                          endY = lowest_chunk.startY)
+                          endY = lowest_chunk.startY, closePoints=lowest_chunk.points)
             self.chunks[lowest - 1] = chunk
             
     def getChunk(self, app, i) -> Chunk:
@@ -310,7 +334,8 @@ class Functionality:
             playerPix = int(app.player.x), int(app.player.y)
             distance = math.dist(blockPix, playerPix)
 
-            onPlayer = int(self.hovering.x) == int(app.player.x) and int(self.hovering.y) == int(app.player.y)
+            onPlayer = (roundHalfUp(self.hovering.x) == roundHalfUp(app.player.x) and
+                    roundHalfUp(self.hovering.y) == roundHalfUp(app.player.y))
 
             isBedrock = app.func.hovering.type == Blocks.BEDROCK
             self.canInteract = ((not onPlayer) and distance < 4 and (not isBedrock)) or self.debug
