@@ -33,13 +33,20 @@ def appStarted(app):
     app.lastTime = time()
     checkBackground(app)
     app.setPosition(600, 200)
+    app.paused = False
+    app.deathScreen = False
     
     app.boldFont = ("Farisi", 16, "bold")
     app.smallFont = ("Farisi", 16)
     app.debugFont = ("Arial", 12)
 
 def keyPressed(app, event):
-    app.func.keys.append(event.key)
+    if not app.paused:
+        app.func.keys.append(event.key)
+    if app.deathScreen:
+        app.paused = False
+        app.deathScreen = False
+        app.player.die(app)
     if event.key == ".":
         app._clearCanvas = not app._clearCanvas
         print("Clear Canvas " + ("On" if app._clearCanvas else "Off"))
@@ -53,12 +60,13 @@ def sizeChanged(app):
     checkBackground(app)
 
 def mouseMoved(app, event):
-    app.func.mouseX = event.x
-    app.func.mouseY = event.y
-    app.func.updateHovering(app)
+    if not app.paused:
+        app.func.mouseX = event.x
+        app.func.mouseY = event.y
+        app.func.updateHovering(app)
 
 def mousePressed(app, event):
-    if app.func.hovering and app.func.canInteract:
+    if app.func.hovering and app.func.canInteract and not app.paused:
         curInv = app.player.inventory[app.func.selectedInventory]
 
         if app.func.hovering.breakable:
@@ -74,7 +82,7 @@ def mousePressed(app, event):
         app.func.updateHovering(app)
 
 def mouseReleased(app, event):
-    app.func.holding = None
+    if not app.paused: app.func.holding = None
 
 def drawChunk(app, canvas: tkinter.Canvas, chunk: Chunk):
     for r in range(chunk.x, chunk.x + CHUNK_SIZE):
@@ -182,36 +190,46 @@ def drawSettings(app, canvas):
                            anchor="n",
                            text=keybind, font=("Arial", "12"))
 
+def drawDeath(app, canvas):
+    canvas.create_image(app.width / 2, app.height / 2, image=getImage(app, "options_background", resize=(app.width, app.height)))
+    canvas.create_text(app.width / 2, app.height * 0.4, width=app.width,
+                        text="You Died!", font=("Arial", "32"), fill="#9A9A9A")
+    canvas.create_text(app.width / 2, app.height * 0.6, width=app.width,
+                        text="Press any key to continue", font=("Arial", "22"), fill="#9A9A9A")
 
 def redrawAll(app, canvas:tkinter.Canvas):
-    app.game.loadChunks(app, canvas)
-    drawGame(app, canvas)
-    drawPlayer(app, canvas)
-    if app.func.debug:
-        drawDebug(app, canvas)
-    drawHotbar(app, canvas)
-    if app.func.keybinds:
-        drawSettings(app, canvas)
+    if app.deathScreen:
+        drawDeath(app, canvas)
+    else:
+        app.game.loadChunks(app, canvas)
+        drawGame(app, canvas)
+        drawPlayer(app, canvas)
+        if app.func.debug:
+            drawDebug(app, canvas)
+        drawHotbar(app, canvas)
+        if app.func.keybinds:
+            drawSettings(app, canvas)
 
 def timerFired(app):
-    app.lastTime = time()
-    """
-    PLAYER
-    """
-    app.player.updateWrapper(app)
-    """
-    GAME
-    """
-    app.game.time = round((app.game.time + 0.01) % 23, 2)
-    for chunk in app.game.loaded:
-        chunk.update(app)
-    """
-    FUNC
-    """
-    app.func.handleKeys(app)
-    if app.func.holding and time() - app.func.holding > 0.1:
-        app.func.handleClick(app)
-        app.func.holding = None
+    if not app.paused:
+        app.lastTime = time()
+        """
+        PLAYER
+        """
+        app.player.updateWrapper(app)
+        """
+        GAME
+        """
+        app.game.time = round((app.game.time + 0.01) % 23, 2)
+        for chunk in app.game.loaded:
+            chunk.update(app)
+        """
+        FUNC
+        """
+        app.func.handleKeys(app)
+        if app.func.holding and time() - app.func.holding > 0.1:
+            app.func.handleClick(app)
+            app.func.holding = None
 
 def main():
     runApp(width=500, height=500, title="Terraria", mvcCheck=False)

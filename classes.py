@@ -21,6 +21,7 @@ class Chunk:
             self.startY = GROUND_LEVEL + random.randint(-TERRAIN_VARIATION, TERRAIN_VARIATION)
             self.endY = endY
 
+        # returns a height for every point in the chunk
         terrain = generateTerrain(self.startY, self.endY)
         for i in range(CHUNK_SIZE):
             height = terrain[i]
@@ -40,6 +41,7 @@ class Chunk:
                     block = Bedrock(x+i, r, chunkI)
                 self.blocks[(x+i, r)] = block
         
+        # Create random points to make caves at
         for i in range(random.randint(0, 7)):
             point = (random.randint(self.x, self.x + CHUNK_SIZE),
                         random.randint(0, GROUND_LEVEL - GRASS_LEVEL - 5))
@@ -49,6 +51,7 @@ class Chunk:
                 "radius": radius
             })
         
+        # take into account self points and nearby points
         for pointObj in closePoints + self.points:
             point = pointObj["coords"]
             rad = pointObj["radius"]
@@ -175,12 +178,15 @@ class Game:
         return item
     
     def placeBlock(self, app, item: Item, block: Block):
+        if block.y >= BUILD_HEIGHT or block.y <= 0:
+            return False
         chunk = self.getChunk(app, block.chunkInd)
         if (block.x, block.y) in chunk.blocks:
             module = __import__("blocks")
             class_ = getattr(module, item.name.capitalize())
             chunk.blocks[(block.x, block.y)] = class_(block.x, block.y, block.chunkInd)
-        chunk.generateAir(app, chunk.blocks[(block.x, block.y)])
+            chunk.generateAir(app, chunk.blocks[(block.x, block.y)])
+            return True
 
 class Player(Entity):
     def __init__(self):
@@ -238,7 +244,8 @@ class Player(Entity):
                     self.health -= dist
                 self.falling = 0
         if self.health <= 0:
-            self.die(app)
+            app.paused = True
+            app.deathScreen = True
         for _ in range(abs(int(self.dx / 0.25))):
             parallax = 1 if self.dx < 0 else -1
             app.game.bgX = [app.game.bgX[bg] + parallax for bg in range(len(app.game.bgX))]
@@ -379,9 +386,9 @@ class Functionality:
             if self.hovering.breakable:
                 app.game.breakBlock(app, self.hovering)
             elif curInv and curInv.canPlace and self.hovering.type == Blocks.AIR:
-                app.game.placeBlock(app, curInv, self.hovering)
-                curInv.count -= 1
-                if curInv.count == 0:
-                    curInv = None
-                app.player.inventory[self.selectedInventory] = curInv
+                if app.game.placeBlock(app, curInv, self.hovering):
+                    curInv.count -= 1
+                    if curInv.count == 0:
+                        curInv = None
+                    app.player.inventory[self.selectedInventory] = curInv
         self.updateHovering(app)

@@ -212,6 +212,8 @@ def getImage(app, name, resize = None):
 def withinBounds(x1, y1, x2, y2, x, y):
     return x1 <= x <= x2 and y1 <= y <= y2
 
+# create a "height map" for a chunk with a start y and end y
+# check readme for link to algo
 def generateTerrain(y1, y2, displace=1, length=0):
     if 2**(length + 1) >= CHUNK_SIZE:
         return [y1, y2]
