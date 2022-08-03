@@ -102,7 +102,7 @@ def drawChunk(app, canvas: tkinter.Canvas, chunk: Chunk):
 
 def drawGame(app, canvas: tkinter.Canvas):
     canvas.create_rectangle(0, 0, app.width, app.height,
-                            fill=colors[int(app.game.time)])
+                            fill=getBackgroundColor(app.game.time))
     canvas.create_rectangle(0, app.height * 0.5, app.width, app.height,
                             fill="#2D404F")
 
@@ -120,7 +120,7 @@ def drawPlayer(app, canvas: tkinter.Canvas):
     canvas.create_image(x, y, image=app.player.getSprite(), anchor="sw")
 
 def drawDebug(app, canvas: tkinter.Canvas):
-    canvas.create_text(5, 10, text=f"G: {int(app.game.time)}", anchor="nw",
+    canvas.create_text(5, 10, text=f"G: {app.game.time}", anchor="nw",
                        font=app.debugFont, fill="#9A9A9A")
     canvas.create_text(5, 30, text=f'TPS: {round(1 / (time() - app.lastTime), 3)}',
                        anchor="w", font=app.debugFont, fill="#9A9A9A")

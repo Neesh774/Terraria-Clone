@@ -7,7 +7,7 @@ import math
 from enum import Enum
 import random
 from settings import *
-
+from assets.colors import colors
 class Blocks(Enum):
     AIR = -1
     GRASS = 0
@@ -232,3 +232,12 @@ def belowSurface(app, block):
     if block.y <= GROUND_LEVEL - GRASS_LEVEL - TERRAIN_VARIATION:
         return True
     return False
+
+def getBackgroundColor(time):
+    lastR, lastG, lastB = colors[math.floor(time)]
+    nextR, nextG, nextB = colors[math.floor(time) + 1]
+    percentage = (time - math.floor(time)) * 100
+    r = lastR + (nextR - lastR) * percentage / 100
+    g = lastG + (nextG - lastG) * percentage / 100
+    b = lastB + (nextB - lastB) * percentage / 100
+    return "#%02x%02x%02x" % (int(r), int(g), int(b))

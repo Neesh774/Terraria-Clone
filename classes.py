@@ -176,7 +176,7 @@ class Game:
         chunk.generateAir(app, block)
         chunk.items.append(item)
         return item
-    
+
     def placeBlock(self, app, item: Item, block: Block):
         if block.y >= BUILD_HEIGHT or block.y <= 0:
             return False
