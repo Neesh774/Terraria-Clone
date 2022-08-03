@@ -117,7 +117,7 @@ def drawDebug(app, canvas: tkinter.Canvas):
     canvas.create_text(5, 30, text=f'TPS: {round(1 / (time() - app.lastTime), 3)}',
                        anchor="w", font=app.debugFont, fill="#9A9A9A")
     canvas.create_text(5, 50,
-                       text=f'P: ({round(app.player.x, 4)}, {round(app.player.y, 4)}) ({round(app.player.dx, 4)}, {round(app.player.dy, 4)}) {app.player.chunk}',
+                       text=f'P: ({round(app.player.x, 4)}, {round(app.player.y, 4)}) ({round(app.player.dx, 4)}, {round(app.player.dy, 4)}) {app.player.chunk} {app.player.falling}',
                        fill="#9A9A9A",font=app.debugFont, anchor="w")
     canvas.create_text(5, 70,
                         text=f'M: ({app.func.mouseX}, {app.func.mouseY})',
@@ -148,6 +148,16 @@ def drawHotbar(app, canvas: tkinter.Canvas):
                                 image=getImage(app, item.name))
         canvas.create_text(left + 4, 10, anchor="nw", text=item.count if item else "",
                            font=app.smallFont, fill="#38332F")
+    healthWidth = 16 * 10 + 5
+    for h in range(9, -1, -1):
+        canvas.create_image(app.width - healthWidth + (h-1) * 18, 64,
+                            image=getImage(app, "emptyHeart", (16, 16)))
+        if h == app.player.health - 0.5:
+            canvas.create_image(app.width - healthWidth + (h - 1) * 18, 64,
+                                image=getImage(app, "halfHeart", (16, 16)))
+        elif h < app.player.health:
+            canvas.create_image(app.width - healthWidth + (h - 1) * 18, 64,
+                                image=getImage(app, "heart", (16, 16)))
     
 def drawSettings(app, canvas):
     left = app.width * 0.1

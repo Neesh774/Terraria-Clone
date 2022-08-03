@@ -184,12 +184,14 @@ class Game:
 
 class Player(Entity):
     def __init__(self):
-        self.chunk = 9
-
         super().__init__(0.1, GROUND_LEVEL)
+        self.chunk = 9
         self.inventory = [InventoryItem("DIRT", STACK_MAX, True)] + [None] * 8
         self.orient = 1
-        self.health = 20
+        self.health = 10
+        self.falling = 0
+        self.respawnPoint = (0.1, GROUND_LEVEL)
+        self.sneak = False
         self.image = Image.open("assets/boris.png").resize((int(UNIT_WH * 0.8), int(UNIT_WH * 0.8)))
     
     def getSprite(self):
@@ -227,6 +229,16 @@ class Player(Entity):
                     self.inventory[app.func.selectedInventory] = item
 
     def update(self, app):
+        if FALL_DAMAGE:
+            if self.dy > 0:
+                self.falling += 1
+            else:
+                if self.falling > 12:
+                    dist = self.falling - 12
+                    self.health -= dist
+                self.falling = 0
+        if self.health <= 0:
+            self.die(app)
         for _ in range(abs(int(self.dx / 0.25))):
             parallax = 1 if self.dx < 0 else -1
             app.game.bgX = [app.game.bgX[bg] + parallax for bg in range(len(app.game.bgX))]
@@ -260,6 +272,23 @@ class Player(Entity):
             app.game.loaded.append(app.game.getChunk(app, chunkIndex))
         self.chunk = newChunk
         app.func.updateHovering(app)
+    
+    def die(self, app):
+        # drop items
+        chunk = app.game.getChunk(app, self.chunk)
+        for item in self.inventory:
+            if not item: continue
+            chunk.items.append(item.toItem(self.chunk, self.x, self.y, canPickUp=True, count=item.count))
+        
+        self.x, self.y = self.respawnPoint
+        self.health = 10
+        self.falling = 0
+        self.dx = 0
+        self.dy = 0
+        self.orient = 1
+        self.chunk = 9
+        
+        self.inventory = [None] * 9
 
 class Functionality:
     def __init__(self, app):
@@ -297,9 +326,11 @@ class Functionality:
         PLAYER
         """
         if key.isupper():
+            app.player.sneak = True
             slow = 0.5
             key = key.lower()
         else:
+            app.player.sneak = False
             slow = 1
 
         if "w" == key and isOnGround(app, app.player.x, app.player.y):

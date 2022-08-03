@@ -31,7 +31,7 @@ class Entity:
         if app.func.goodGraphics:
             self.dx *= 0.6
         else:
-            self.dx *= 0.6
+            self.dx *= 0.3
         if abs(self.dx) < 0.005:
             self.dx = 0
         if hasattr(self, "update"):
@@ -48,13 +48,23 @@ class Entity:
         blockRight = getBlockFromCoords(app, math.ceil(self.x), math.ceil(self.y))
         blockTop = getBlockFromCoords(app, math.floor(self.x), int(self.y + 1))
         blockCenter = getBlockFromCoords(app, int(self.x), int(self.y))
+        onGround = False
+        # Gravity Collision
+        if isOnGround(app, self.x, self.y) and self.dy >= 0:
+            onGround = True
+            self.dy = 0
+            groundLeft = getGround(app, math.floor(self.x), self.y)
+            groundRight = getGround(app, math.floor(self.x + 0.8), self.y)
+            self.y = max(groundLeft, groundRight)
         
         # Right Collision
         if 0 < self.dx <= 1:
             topBlock = blockTop and blockTop.solid
             diagBlock = getBlockFromCoords(app, math.ceil(self.x), math.ceil(self.y) + 1)
             freeDiagBlock = not diagBlock or not diagBlock.solid
-            if blockRight and blockRight.solid and not topBlock and freeDiagBlock:
+            sneak = self.sneak if hasattr(self, "sneak") else False
+            if (blockRight and blockRight.solid and not topBlock
+                and freeDiagBlock and onGround and not sneak):
                 self.x = blockRight.x
                 self.y = blockRight.y + 1
             elif blockRight and blockRight.solid:
@@ -66,7 +76,9 @@ class Entity:
             topBlock = blockTop and blockTop.solid
             diagBlock = getBlockFromCoords(app, math.floor(self.x) - 1, math.ceil(self.y) + 1)
             freeDiagBlock = not diagBlock or not diagBlock.solid
-            if blockLeft and blockLeft.solid and not topBlock and freeDiagBlock:
+            sneak = self.sneak if hasattr(self, "sneak") else False
+            if (blockLeft and blockLeft.solid and not topBlock
+                and freeDiagBlock and onGround and not sneak):
                 self.x = blockLeft.x + 1
                 self.y = blockLeft.y + 1
             elif blockLeft and blockLeft.solid:
@@ -77,13 +89,6 @@ class Entity:
         if self.dy < 0 and blockTop and blockTop.solid:
             self.dy = 0
             self.y = blockTop.y - 1
-        
-        # Gravity Collision
-        if isOnGround(app, self.x, self.y) and self.dy >= 0:
-            self.dy = 0
-            groundLeft = getGround(app, math.floor(self.x), self.y)
-            groundRight = getGround(app, math.floor(self.x + 0.8), self.y)
-            self.y = max(groundLeft, groundRight)
 
 ###############################################################################
 # HELPER FUNCS
@@ -133,9 +138,9 @@ def getGround(app, x, y):
     return -1
 
 def generateChunks(app):
-    if min(app.game.loaded).index < min(app.game.chunks.values()).index + 2:
+    while min(app.game.loaded).index < min(app.game.chunks.values()).index + 2:
         app.game.generateChunk(app, False)
-    if max(app.game.loaded).index > max(app.game.chunks.values()).index - 2:
+    while max(app.game.loaded).index > max(app.game.chunks.values()).index - 2:
         app.game.generateChunk(app, True)
 
 def drawBlock(app, block, canvas):
