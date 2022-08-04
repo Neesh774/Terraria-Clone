@@ -54,7 +54,7 @@ class Entity:
             blockTop = blockTopRight
         else:
             blockTop = None
-        onGround = True
+        onGround = isOnGround(app, self.x, self.y - self.dy)
         
         # Right Collision
         if 0 < self.dx:
@@ -97,17 +97,23 @@ class Entity:
             self.y = max(groundLeft, groundRight)
         
         # Top Collision
-        if self.dy < 0 and blockTop and blockTop.solid:
-            leftOverlap = hasOverlap(
-                (blockTopLeft.x, blockTopLeft.y,
-                    blockTopLeft.x + 1, blockTopLeft.y + 1),
-                (self.x, self.y - self.dy, self.x + 0.8, self.y - self.dy - 0.8)
-            )
-            rightOverlap = hasOverlap(
-                (blockTopRight.x, blockTopRight.y,
-                    blockTopRight.x + 1, blockTopRight.y + 1),
-                (self.x, self.y - self.dy, self.x + 0.8, self.y - self.dy - 0.8)
-            )
+        if self.dy != 0 and blockTop and blockTop.solid:
+            if blockTopLeft:
+                leftOverlap = hasOverlap(
+                    (blockTopLeft.x, blockTopLeft.y,
+                        blockTopLeft.x + 1, blockTopLeft.y + 1),
+                    (self.x, self.y - self.dy, self.x + 0.8, self.y - self.dy + 0.8)
+                )
+            else:
+                leftOverlap = False
+            if blockTopRight:
+                rightOverlap = hasOverlap(
+                    (blockTopRight.x, blockTopRight.y,
+                        blockTopRight.x + 1, blockTopRight.y + 1),
+                    (self.x, self.y - self.dy, self.x + 0.8, self.y - self.dy + 0.8)
+                )
+            else:
+                rightOverlap = False
 
             if leftOverlap and blockTopLeft.solid:
                 self.dy = 0
@@ -115,6 +121,7 @@ class Entity:
             if rightOverlap and blockTopRight.solid:
                 self.dy = 0
                 self.y = blockTopRight.y - 1
+                
 
 ###############################################################################
 # HELPER FUNCS
