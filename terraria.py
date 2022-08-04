@@ -80,6 +80,10 @@ def mousePressed(app, event):
 
             app.player.inventory[app.func.selectedInventory] = curInv
         app.func.updateHovering(app)
+    elif (app.func.hovering and not app.func.canInteract) or not app.func.hovering:
+        playerX = getPixX(app, app.player.x)
+        right = event.x > playerX
+        app.player.hit(app, right)
 
 def mouseReleased(app, event):
     if not app.paused: app.func.holding = None

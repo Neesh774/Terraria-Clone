@@ -67,11 +67,11 @@ class Chunk:
     def getRange(self, app):
         return self.x, self.x + CHUNK_SIZE
     
-    def inChunk(self, app, x):
+    def inChunk(self, x):
         return self.x <= x and x < self.x + CHUNK_SIZE
-    
+
     def generateAir(self, app, block: Block):
-        if not self.inChunk(app, block.x - 1):
+        if not self.inChunk(block.x - 1):
             leftChunk = app.game.getChunk(app, self.index - 1)
             if (block.x - 1, block.y) not in leftChunk.blocks:
                 leftChunk.blocks[(block.x - 1, block.y)] = Air(block.x - 1, block.y,
@@ -79,7 +79,7 @@ class Chunk:
         elif (block.x - 1, block.y) not in self.blocks:
             self.blocks[(block.x - 1, block.y)] = Air(block.x - 1, block.y,
                                                         self.index)
-        if not self.inChunk(app, block.x + 1):
+        if not self.inChunk(block.x + 1):
             rightChunk = app.game.getChunk(app, self.index + 1)
             if (block.x + 1, block.y) not in rightChunk.blocks:
                 rightChunk.blocks[(block.x + 1, block.y)] = Air(block.x + 1, block.y,
@@ -143,7 +143,7 @@ class Game:
             self.chunks[i] = Chunk(app, chunkX, i, startY=startY, closePoints=closePoints)
             startY = self.chunks[i].endY
         
-        self.chunks[9].mobs.append(Mushroom(app, 2, self.chunks[9].startY))
+        self.chunks[9].mobs.append(Mushroom(app, 5, GROUND_LEVEL + 1))
 
         self.loaded = []
 
@@ -172,7 +172,7 @@ class Game:
     def getChunkIndex(self, x) -> int:
         for ci in self.chunks:
             chunk = self.chunks[ci]
-            if chunk.x == x:
+            if chunk.inChunk(x):
                 return ci
 
     def loadChunks(self, app, canvas):
@@ -316,7 +316,22 @@ class Player(Entity):
         self.chunk = 9
         
         self.inventory = [None] * 9
-
+    
+    def hit(self, app, isRight):
+        curChunk = app.game.getChunk(app, self.chunk)
+        rightChunk = app.game.getChunk(app, self.chunk + 1)
+        mobs = curChunk.mobs + rightChunk.mobs
+        for mob in mobs:
+            if isRight:
+                withinXRange = mob.x > self.x and mob.x < self.x + 2
+                withinYRange = mob.y >= self.y and mob.y <= self.y + 1
+                if withinXRange and withinYRange:
+                    mob.takeDamage(app, 1)
+            else:
+                withinXRange = mob.x < self.x and mob.x > self.x - 2
+                withinYRange = mob.y >= self.y and mob.y <= self.y + 1
+                if withinXRange and withinYRange:
+                    mob.takeDamage(app, 1)
 class Functionality:
     def __init__(self, app):
         self.mouseX = 0
@@ -424,6 +439,8 @@ class Mushroom(Entity):
         self.damage = 0.5
         self.damageCooldown = 0
         self.idle = []
+        self.width = 32
+        self.height = 32
         idleSprites = app.images["mush-idle"]
         for i in range(14):
             sprite = idleSprites.crop((32 * i, 0, 32 * (i + 1), 32))
@@ -434,6 +451,12 @@ class Mushroom(Entity):
             sprite = runSprites.crop((32 * i, 0, 32 * (i + 1), 32))
             self.run.append(sprite)
         self.spriteIndex = 0
+        self.isHurt = -1
+        self.hurt = []
+        hurtSprites = app.images["mush-hit"]
+        for i in range(5):
+            sprite = hurtSprites.crop((32 * i, 0, 32 * (i + 1), 32))
+            self.hurt.append(sprite)
     def update(self, app):
         # check if player is in range
         dist = math.dist((self.x, self.y), (app.player.x, app.player.y))
@@ -450,16 +473,22 @@ class Mushroom(Entity):
         if self.damageCooldown < 0:
             self.damageCooldown = 0
         
-        if self.dx != 0 or self.dy != 0:
+        if self.isHurt >= 0:
+            self.isHurt += 1
+            if self.isHurt == 4:
+                self.isHurt = -1
+            self.spriteIndex = self.isHurt
+        elif self.dx != 0 or self.dy != 0:
             self.spriteIndex = (self.spriteIndex + 1) % len(self.run)
         else:
             self.spriteIndex = (self.spriteIndex + 1) % len(self.idle)
     
     def draw(self, app, canvas):
-        wh = int(UNIT_WH * 0.8)
         x = getPixX(app, self.x)
         y = getPixY(app, self.y)
-        if self.dx != 0 or self.dy != 0:
+        if self.isHurt >= 0:
+            sprite = self.hurt[self.spriteIndex]
+        elif self.dx != 0 or self.dy != 0:
             sprite = self.run[self.spriteIndex]
         else:
             sprite = self.idle[self.spriteIndex]
@@ -484,3 +513,21 @@ class Mushroom(Entity):
             app.paused = True
             app.deathScreen = True
         self.damageCooldown = 5
+    
+    def takeDamage(self, app, damage):
+        self.health -= damage
+        if self.health <= 0:
+            self.die(app)
+        if app.player.x < self.x:
+            self.dx += 0.6
+        else:
+            self.dx -= 0.6
+        self.dy -= 0.2
+        self.isHurt = 0
+        self.spriteIndex = 0
+    
+    def die(self, app):
+        chunk = app.game.getChunk(app, app.game.getChunkIndex(self.x))
+        chunk.mobs.remove(self)
+        drop = Item("carrot", self.x, self.y, chunk, random.randint(1, 3), dy=-0.5)
+        chunk.items.append(drop)

@@ -132,7 +132,7 @@ def almostEqual(d1, d2, epsilon=10**-7):  # helper-fn
 
 def getBlockFromCoords(app, x, y):
     for chunk in app.game.loaded:
-        if chunk.inChunk(app, x) and 0 <= y <= BUILD_HEIGHT and (x, y) in chunk.blocks:
+        if chunk.inChunk(x) and 0 <= y <= BUILD_HEIGHT and (x, y) in chunk.blocks:
             return chunk.blocks[(x, y)]
     return None
 
@@ -164,7 +164,7 @@ def getPixY(app, y):
 
 def getGround(app, x, y):
     for chunk in app.game.loaded:
-        if chunk.inChunk(app, x):
+        if chunk.inChunk(x):
             for r in range(math.ceil(y), -1, -1):
                 if (x, r) in chunk.blocks and chunk.blocks[(x, r)].solid:
                     return chunk.blocks[(x, r)].y + 1
@@ -281,3 +281,15 @@ def hasOverlap(r1, r2):
     x1, y1, x2, y2 = r1
     x3, y3, x4, y4 = r2
     return (x1 <= x3 <= x2 or x1 <= x4 <= x2) and (y1 <= y3 <= y2 or y1 <= y4 <= y2)
+
+def isOverEnemy(app, x, y):
+    chunkIndex = app.game.getChunkIndex(x)
+    chunk = app.game.getChunk(app, chunkIndex)
+    for mob in chunk.mobs:
+        width = mob.width / UNIT_WH
+        height = mob.height / UNIT_WH
+        margin = 0.4
+        if withinBounds(mob.x - width / 2 - margin, mob.y - height / 2 - margin,
+                        mob.x + width / 2 + margin, mob.y + height / 2, x, y):
+            return mob
+    return False
