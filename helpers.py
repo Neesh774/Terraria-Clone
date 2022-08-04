@@ -234,12 +234,14 @@ def roundHalfUp(d):  # helper-fn
     # https://docs.python.org/3/library/decimal.html#rounding-modes
     return int(decimal.Decimal(d).to_integral_value(rounding=rounding))
 
-def getImage(app, name, resize = None):
+def getImage(app, name, resize = None, crop = None):
     if name not in app.images:
         return None
     img = copy.copy(app.images[name])
     if resize:
         img = img.resize(resize)
+    if crop:
+        img = img.crop(crop)
     return ImageTk.PhotoImage(img)
 
 def withinBounds(x1, y1, x2, y2, x, y):

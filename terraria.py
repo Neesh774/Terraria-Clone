@@ -99,6 +99,9 @@ def drawChunk(app, canvas: tkinter.Canvas, chunk: Chunk):
     
     for item in chunk.items:
         item.draw(app, canvas)
+    
+    for mob in chunk.mobs:
+        mob.draw(app, canvas)
 
 def drawGame(app, canvas: tkinter.Canvas):
     canvas.create_rectangle(0, 0, app.width, app.height,

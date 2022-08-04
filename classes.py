@@ -14,6 +14,7 @@ class Chunk:
         self.index = chunkI
         self.items = []
         self.points = []
+        self.mobs = []
         if startY:
             self.endY = GROUND_LEVEL + random.randint(-TERRAIN_VARIATION, TERRAIN_VARIATION)
             self.startY = startY
@@ -109,6 +110,16 @@ class Chunk:
                 else:
                     newChunk = app.game.getChunk(app, self.index + 1)
                 newChunk.items.append(item)
+        
+        for mob in self.mobs:
+            mob.updateWrapper(app)
+            if mob.x < self.x or mob.x > self.x + CHUNK_SIZE:
+                self.mobs.remove(mob)
+                if mob.x < self.x:
+                    newChunk = app.game.getChunk(app, self.index - 1)
+                else:
+                    newChunk = app.game.getChunk(app, self.index + 1)
+                newChunk.mobs.append(mob)
 
     def __eq__(self, other):
         return self.index == other.index
@@ -131,6 +142,8 @@ class Game:
                 closePoints = []
             self.chunks[i] = Chunk(app, chunkX, i, startY=startY, closePoints=closePoints)
             startY = self.chunks[i].endY
+        
+        self.chunks[9].mobs.append(Mushroom(app, 2, self.chunks[9].startY))
 
         self.loaded = []
 
@@ -400,3 +413,74 @@ class Functionality:
                         curInv = None
                     app.player.inventory[self.selectedInventory] = curInv
         self.updateHovering(app)
+
+class Mushroom(Entity):
+    def __init__(self, app, x, y):
+        super().__init__(x, y)
+        self.health = 5
+        self.viewRange = 10
+        self.attackRange = 1
+        self.orient = 1
+        self.damage = 0.5
+        self.damageCooldown = 0
+        self.idle = []
+        idleSprites = app.images["mush-idle"]
+        for i in range(14):
+            sprite = idleSprites.crop((32 * i, 0, 32 * (i + 1), 32))
+            self.idle.append(sprite)
+        self.run = []
+        runSprites = app.images["mush-run"]
+        for i in range(16):
+            sprite = runSprites.crop((32 * i, 0, 32 * (i + 1), 32))
+            self.run.append(sprite)
+        self.spriteIndex = 0
+    def update(self, app):
+        # check if player is in range
+        dist = math.dist((self.x, self.y), (app.player.x, app.player.y))
+        if dist < self.attackRange and self.damageCooldown == 0:
+            self.attack(app)
+        elif dist < self.viewRange and dist > 1:
+            if self.x < app.player.x:
+                self.moveRight()
+            elif self.x > app.player.x:
+                self.moveLeft()
+        
+        if self.damageCooldown > 0:
+            self.damageCooldown -= 0.2
+        if self.damageCooldown < 0:
+            self.damageCooldown = 0
+        
+        if self.dx != 0 or self.dy != 0:
+            self.spriteIndex = (self.spriteIndex + 1) % len(self.run)
+        else:
+            self.spriteIndex = (self.spriteIndex + 1) % len(self.idle)
+    
+    def draw(self, app, canvas):
+        wh = int(UNIT_WH * 0.8)
+        x = getPixX(app, self.x)
+        y = getPixY(app, self.y)
+        if self.dx != 0 or self.dy != 0:
+            sprite = self.run[self.spriteIndex]
+        else:
+            sprite = self.idle[self.spriteIndex]
+        canvas.create_image(x, y, image=ImageTk.PhotoImage(sprite))
+        
+    def moveRight(self):
+        self.dx += 0.05
+        self.orient = 1
+    def moveLeft(self):
+        self.dx -= 0.05
+        self.orient = -1
+    
+    def attack(self, app):
+        app.player.health -= self.damage
+        if self.x < app.player.x:
+            app.player.dy -= 0.2
+            app.player.dx += 0.2
+        else:
+            app.player.dy -= 0.2
+            app.player.dx -= 0.2
+        if app.player.health <= 0:
+            app.paused = True
+            app.deathScreen = True
+        self.damageCooldown = 5
