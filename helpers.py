@@ -46,25 +46,28 @@ class Entity:
     def checkForCollision(self, app):
         blockLeft = getBlockFromCoords(app, math.floor(self.x) - 1, math.ceil(self.y))
         blockRight = getBlockFromCoords(app, math.ceil(self.x), math.ceil(self.y))
-        blockTop = getBlockFromCoords(app, math.floor(self.x), int(self.y + 1))
-        blockCenter = getBlockFromCoords(app, int(self.x), int(self.y))
-        onGround = False
-        # Gravity Collision
-        if isOnGround(app, self.x, self.y) and self.dy >= 0:
-            onGround = True
-            self.dy = 0
-            groundLeft = getGround(app, math.floor(self.x), self.y)
-            groundRight = getGround(app, math.floor(self.x + 0.8), self.y)
-            self.y = max(groundLeft, groundRight)
+        blockTopLeft = getBlockFromCoords(app, math.floor(self.x), math.floor(self.y + 1))
+        blockTopRight = getBlockFromCoords(app, math.ceil(self.x), math.floor(self.y + 1))
+        if blockTopLeft and blockTopLeft.solid:
+            blockTop = blockTopLeft
+        elif blockTopRight and blockTopRight.solid:
+            blockTop = blockTopRight
+        else:
+            blockTop = None
+        onGround = True
         
         # Right Collision
-        if 0 < self.dx <= 1:
-            topBlock = blockTop and blockTop.solid
+        if 0 < self.dx:
+            topBlock = blockTopLeft and blockTopLeft.solid
             diagBlock = getBlockFromCoords(app, math.ceil(self.x), math.ceil(self.y) + 1)
             freeDiagBlock = not diagBlock or not diagBlock.solid
             sneak = self.sneak if hasattr(self, "sneak") else False
-            if (blockRight and blockRight.solid and not topBlock
-                and freeDiagBlock and onGround and not sneak):
+            if (blockRight and
+                blockRight.solid and
+                not topBlock and
+                freeDiagBlock and
+                onGround and
+                not sneak):
                 self.x = blockRight.x
                 self.y = blockRight.y + 1
             elif blockRight and blockRight.solid:
@@ -72,7 +75,7 @@ class Entity:
                 self.x = blockRight.x - 0.9
 
         # Left Collision
-        if -1 <= self.dx < 0:
+        elif self.dx < 0:
             topBlock = blockTop and blockTop.solid
             diagBlock = getBlockFromCoords(app, math.floor(self.x) - 1, math.ceil(self.y) + 1)
             freeDiagBlock = not diagBlock or not diagBlock.solid
@@ -84,11 +87,34 @@ class Entity:
             elif blockLeft and blockLeft.solid:
                 self.dx = 0
                 self.x = blockLeft.x + 1.1
+
+        # Gravity Collision
+        if isOnGround(app, self.x, self.y) and self.dy >= 0:
+            onGround = True
+            self.dy = 0
+            groundLeft = getGround(app, math.floor(self.x), self.y)
+            groundRight = getGround(app, math.floor(self.x + 0.8), self.y)
+            self.y = max(groundLeft, groundRight)
         
         # Top Collision
         if self.dy < 0 and blockTop and blockTop.solid:
-            self.dy = 0
-            self.y = blockTop.y - 1
+            leftOverlap = hasOverlap(
+                (blockTopLeft.x, blockTopLeft.y,
+                    blockTopLeft.x + 1, blockTopLeft.y + 1),
+                (self.x, self.y - self.dy, self.x + 0.8, self.y - self.dy - 0.8)
+            )
+            rightOverlap = hasOverlap(
+                (blockTopRight.x, blockTopRight.y,
+                    blockTopRight.x + 1, blockTopRight.y + 1),
+                (self.x, self.y - self.dy, self.x + 0.8, self.y - self.dy - 0.8)
+            )
+
+            if leftOverlap and blockTopLeft.solid:
+                self.dy = 0
+                self.y = blockTopLeft.y - 1
+            if rightOverlap and blockTopRight.solid:
+                self.dy = 0
+                self.y = blockTopRight.y - 1
 
 ###############################################################################
 # HELPER FUNCS
@@ -241,3 +267,8 @@ def getBackgroundColor(time):
     g = lastG + (nextG - lastG) * percentage / 100
     b = lastB + (nextB - lastB) * percentage / 100
     return "#%02x%02x%02x" % (int(r), int(g), int(b))
+
+def hasOverlap(r1, r2):
+    x1, y1, x2, y2 = r1
+    x3, y3, x4, y4 = r2
+    return (x1 <= x3 <= x2 or x1 <= x4 <= x2) and (y1 <= y3 <= y2 or y1 <= y4 <= y2)

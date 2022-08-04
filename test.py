@@ -1,28 +1,38 @@
+from PIL import Image
+import numpy as np
 from cmu_112_graphics import *
-import random
-import decimal
 
-def roundHalfUp(d):  # helper-fn
-    # Round to nearest with ties going away from zero.
-    rounding = decimal.ROUND_HALF_UP
-    # See other rounding options here:
-    # https://docs.python.org/3/library/decimal.html#rounding-modes
-    return int(decimal.Decimal(d).to_integral_value(rounding=rounding))
+# Load image, ensure not palettised, and make into Numpy array
 
-def main():
-    runApp(width=500, height=500, mvcCheck=False)
+def getColors():
+    pim = Image.open('image.png').convert('RGB')
+    im  = np.array(pim)
 
-# def appStarted(app):
-#     pass
+    colors = {}
 
-
-# def generateCaves():
-#     pass
-
-# def generateEmptyCaveMap():
+    for x in range(im.shape[1]):
+        for y in range(im.shape[0]):
+            colors[(x, y)] = im[y, x]
     
+    
+    width = im.shape[1]
+    height = im.shape[0]
+    return (colors, width, height)
 
-# def redrawAll(app, canvas):
-#     pass
+def appStarted(app):
+    app.colors, app.imW, app.imY = getColors()
 
-# main()
+def redrawAll(app, canvas):
+    for x in range(app.width // 2):
+        for y in range(app.height // 2):
+            color = app.colors[(x, y)]
+            color = "#%02x%02x%02x" % (int(color[0]), int(color[1]), int(color[2]))
+            canvas.create_rectangle(x * 2, y * 2, (x + 1) * 2, (y + 1) * 2, fill=color)
+        
+def main():
+    pim = Image.open('image.png').convert('RGB')
+    im  = np.array(pim)
+    runApp(width=im.shape[1]*2, height=im.shape[0]*2)
+
+if __name__ == "__main__":
+    main()

@@ -58,7 +58,9 @@ class Chunk:
             for i in range(point[0] - rad, point[0] + rad):
                 for j in range(point[1] - rad, point[1] + rad):
                     dist = math.sqrt((i - point[0])**2 + (j - point[1])**2)
-                    if (i, j) in self.blocks and dist <= rad and self.blocks[(i, j)].breakable:
+                    randomChance = random.randint(-1, 2)
+                    if ((i, j) in self.blocks and dist <= (rad + randomChance)
+                        and self.blocks[(i, j)].breakable):
                         self.blocks[(i, j)] = Air(i, j, chunkI)
                     
     def getRange(self, app):
@@ -287,6 +289,11 @@ class Player(Entity):
             if not item: continue
             chunk.items.append(item.toItem(self.chunk, self.x, self.y, canPickUp=True, count=item.count))
         
+        # check around respawn point for valid spawn point
+        block = getBlockFromCoords(app, self.respawnPoint[0], self.respawnPoint[1])
+        while block and block.solid:
+            self.respawnPoint = (self.respawnPoint[0] + 1, self.respawnPoint[1])
+            block = getBlockFromCoords(app, self.respawnPoint[0], self.respawnPoint[1])
         self.x, self.y = self.respawnPoint
         self.health = 10
         self.falling = 0
@@ -371,9 +378,10 @@ class Functionality:
             blockPix = coords[0], coords[1]
             playerPix = int(app.player.x), int(app.player.y)
             distance = math.dist(blockPix, playerPix)
-
-            onPlayer = (roundHalfUp(self.hovering.x) == roundHalfUp(app.player.x) and
-                    roundHalfUp(self.hovering.y) == roundHalfUp(app.player.y))
+            x = app.player.x
+            y = app.player.y
+            onPlayer = (withinBounds(coords[0], coords[1], coords[0] + 1, coords[1] + 1, x, y + 0.4)
+                or withinBounds(coords[0], coords[1], coords[0] + 1, coords[1] + 1, x + 0.8, y + 0.4))
 
             isBedrock = app.func.hovering.type == Blocks.BEDROCK
             self.canInteract = ((not onPlayer) and distance < 4 and (not isBedrock)) or self.debug
