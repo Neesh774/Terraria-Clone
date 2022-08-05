@@ -143,7 +143,7 @@ class Game:
             self.chunks[i] = Chunk(app, chunkX, i, startY=startY, closePoints=closePoints)
             startY = self.chunks[i].endY
         
-        self.chunks[9].mobs.append(Mushroom(app, 5, GROUND_LEVEL + 1))
+        self.chunks[9].mobs.append(Slime(app, 5, GROUND_LEVEL + 1))
 
         self.loaded = []
 
@@ -202,6 +202,35 @@ class Game:
             chunk.blocks[(block.x, block.y)] = class_(block.x, block.y, block.chunkInd)
             chunk.generateAir(app, chunk.blocks[(block.x, block.y)])
             return True
+    
+    def spawnMob(self, app):
+        # loop through blocks within PLAYER_MOB_SPAWN_RADIUS of player
+        left_side = int(app.player.x - PLAYER_MOB_SPAWN_RADIUS)
+        right_side = int(app.player.x + PLAYER_MOB_SPAWN_RADIUS)
+        top_side = int(app.player.y - PLAYER_MOB_SPAWN_RADIUS)
+        bottom_side = int(app.player.y + PLAYER_MOB_SPAWN_RADIUS)
+        x = random.randint(left_side, right_side)
+        y = random.randint(top_side, bottom_side)
+        isNight = app.game.time < 6 or app.game.time > 18
+        if x > app.player.x - 3 and x < app.player.x + 3:
+            return
+        if y > app.player.y - 3 and y < app.player.y + 3:
+            return
+        block = getBlockFromCoords(app, x, y)
+        if not block or block.solid:
+            return
+        chunk = self.getChunk(app, block.chunkInd)
+        if len(chunk.mobs) >= MOB_LIMIT:
+            return
+        onGround = isOnGround(app, x, y)
+        if not onGround:
+            return
+        if y > GROUND_LEVEL:
+            mob = Mushroom(app, x, y)
+        else:
+            mob = Slime(app, x, y)
+        self.getChunk(app, block.chunkInd).mobs.append(mob)
+        return mob
 
 class Player(Entity):
     def __init__(self):
@@ -492,6 +521,104 @@ class Mushroom(Entity):
             sprite = self.run[self.spriteIndex]
         else:
             sprite = self.idle[self.spriteIndex]
+        if self.orient == 1:
+            sprite = sprite.transpose(method=Image.Transpose.FLIP_LEFT_RIGHT)
+        canvas.create_image(x, y, image=ImageTk.PhotoImage(sprite))
+        
+    def moveRight(self):
+        self.dx += 0.05
+        self.orient = 1
+    def moveLeft(self):
+        self.dx -= 0.05
+        self.orient = -1
+    
+    def attack(self, app):
+        app.player.health -= self.damage
+        if self.x < app.player.x:
+            app.player.dy -= 0.2
+            app.player.dx += 0.2
+        else:
+            app.player.dy -= 0.2
+            app.player.dx -= 0.2
+        if app.player.health <= 0:
+            app.paused = True
+            app.deathScreen = True
+        self.damageCooldown = 5
+    
+    def takeDamage(self, app, damage):
+        self.health -= damage
+        if self.health <= 0:
+            self.die(app)
+        if app.player.x < self.x:
+            self.dx += 0.6
+        else:
+            self.dx -= 0.6
+        self.dy -= 0.2
+        self.isHurt = 0
+        self.spriteIndex = 0
+    
+    def die(self, app):
+        chunk = app.game.getChunk(app, app.game.getChunkIndex(self.x))
+        chunk.mobs.remove(self)
+        drop = Item("carrot", self.x, self.y, chunk, random.randint(1, 3), dy=-0.5)
+        chunk.items.append(drop)
+
+class Slime(Entity):
+    def __init__(self, app, x, y):
+        super().__init__(x, y)
+        self.health = 10
+        self.viewRange = 5
+        self.attackRange = 1
+        self.orient = 1
+        self.damage = 1
+        self.damageCooldown = 0
+        self.idle = []
+        self.width = 44
+        self.height = 30
+        idleSprites = app.images["slime-run"]
+        for i in range(10):
+            sprite = idleSprites.crop((44 * i, 0, 44 * (i + 1), 30))
+            self.idle.append(sprite)
+        self.spriteIndex = 0
+        self.isHurt = -1
+        self.hurt = []
+        hurtSprites = app.images["slime-hit"]
+        for i in range(5):
+            sprite = hurtSprites.crop((44 * i, 0, 44 * (i + 1), 30))
+            self.hurt.append(sprite)
+    def update(self, app):
+        # check if player is in range
+        dist = math.dist((self.x, self.y), (app.player.x, app.player.y))
+        if dist < self.attackRange and self.damageCooldown == 0:
+            self.attack(app)
+        elif dist < self.viewRange and dist > 1:
+            if self.x < app.player.x:
+                self.moveRight()
+            elif self.x > app.player.x:
+                self.moveLeft()
+        
+        if self.damageCooldown > 0:
+            self.damageCooldown -= 0.2
+        if self.damageCooldown < 0:
+            self.damageCooldown = 0
+        
+        if self.isHurt >= 0:
+            self.isHurt += 1
+            if self.isHurt == 4:
+                self.isHurt = -1
+            self.spriteIndex = self.isHurt
+        else:
+            self.spriteIndex = (self.spriteIndex + 1) % len(self.idle)
+    
+    def draw(self, app, canvas):
+        x = getPixX(app, self.x)
+        y = getPixY(app, self.y)
+        if self.isHurt >= 0:
+            sprite = self.hurt[self.spriteIndex]
+        else:
+            sprite = self.idle[self.spriteIndex]
+        if self.orient == 1:
+            sprite = sprite.transpose(method=Image.Transpose.FLIP_LEFT_RIGHT)
         canvas.create_image(x, y, image=ImageTk.PhotoImage(sprite))
         
     def moveRight(self):

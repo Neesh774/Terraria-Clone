@@ -164,7 +164,7 @@ def drawHotbar(app, canvas: tkinter.Canvas):
         canvas.create_text(left + 4, 10, anchor="nw", text=item.count if item else "",
                            font=app.smallFont, fill="#38332F")
     healthWidth = 16 * 10 + 5
-    for h in range(9, -1, -1):
+    for h in range(0, 10):
         canvas.create_image(app.width - healthWidth + (h-1) * 18, 64,
                             image=getImage(app, "emptyHeart", (16, 16)))
         if h == app.player.health - 0.5:
@@ -230,6 +230,8 @@ def timerFired(app):
         app.game.time = round((app.game.time + 0.01) % 23, 2)
         for chunk in app.game.loaded:
             chunk.update(app)
+
+        app.game.spawnMob(app)
         """
         FUNC
         """
