@@ -241,7 +241,7 @@ class Player(Entity):
     def __init__(self):
         super().__init__(0.1, GROUND_LEVEL)
         self.chunk = 9
-        self.inventory = [InventoryItem("DIRT", STACK_MAX, True), InventoryItem("DIRT", STACK_MAX, True)] + [None] * 7
+        self.inventory = [Bread(), InventoryItem("DIRT", STACK_MAX, canPlace=True)] + [None] * 7
         self.orient = 1
         self.health = 10
         self.falling = 0
@@ -257,11 +257,12 @@ class Player(Entity):
 
     def pickUp(self, app, item: InventoryItem):
         for i in range(len(self.inventory)):
+            if self.inventory[i] and self.inventory[i] == item and self.inventory[i].count < STACK_MAX:
+                self.inventory[i].count += item.count
+                return
+        for i in range(len(self.inventory)):
             if not self.inventory[i]:
                 self.inventory[i] = item
-                return
-            elif self.inventory[i] == item and self.inventory[i].count < STACK_MAX:
-                self.inventory[i].count += item.count
                 return
         self.throwItem(app, item)
     
@@ -375,6 +376,11 @@ class Player(Entity):
                 withinYRange = mob.y >= self.y and mob.y <= self.y + 1
                 if withinXRange and withinYRange:
                     mob.takeDamage(app, 1)
+    def eat(self, food):
+        self.health += food.foodValue
+        if self.health > 10:
+            self.health = 10
+    
 class Functionality:
     def __init__(self, app):
         self.mouseX = 0
@@ -406,7 +412,13 @@ class Functionality:
             if num != 0: self.selectedInventory = num - 1
         if "g" == key:
             self.goodGraphics = not self.goodGraphics
-
+        if "-" == key and self.debug:
+            rand = random.randint(0, 1)
+            chunk = app.game.getChunk(app, app.player.chunk)
+            if rand == 0:
+                chunk.mobs.append(Mushroom(app, app.player.x, app.player.y))
+            else:
+                chunk.mobs.append(Slime(app, app.player.x, app.player.y))
         """
         PLAYER
         """
@@ -568,7 +580,7 @@ class Mushroom(Entity):
     def die(self, app):
         chunk = app.game.getChunk(app, app.game.getChunkIndex(self.x))
         chunk.mobs.remove(self)
-        drop = Item("carrot", self.x, self.y, chunk, random.randint(1, 3), dy=-0.5)
+        drop = Item("carrot", self.x, self.y, chunk, random.randint(1, 3), dy=-0.5, inventoryClass=Carrot)
         chunk.items.append(drop)
 
 class Slime(Entity):
@@ -635,7 +647,7 @@ class Slime(Entity):
             sprite = self.idle[self.spriteIndex]
         if self.orient == 1:
             sprite = sprite.transpose(method=Image.Transpose.FLIP_LEFT_RIGHT)
-        canvas.create_image(x, y, image=ImageTk.PhotoImage(sprite))
+        app.entities.append(canvas.create_image(x, y, image=ImageTk.PhotoImage(sprite)))
         
     def moveRight(self):
         self.dx += 0.05
@@ -672,5 +684,5 @@ class Slime(Entity):
     def die(self, app):
         chunk = app.game.getChunk(app, app.game.getChunkIndex(self.x))
         chunk.mobs.remove(self)
-        drop = Item("carrot", self.x, self.y, chunk, random.randint(1, 3), dy=-0.5)
+        drop = Item("carrot", self.x, self.y, chunk, random.randint(1, 3), dy=-0.5, inventoryClass=Carrot)
         chunk.items.append(drop)

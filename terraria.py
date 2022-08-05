@@ -76,9 +76,18 @@ def mousePressed(app, event):
             app.game.placeBlock(app, curInv, app.func.hovering)
         app.func.updateHovering(app)
     elif (app.func.hovering and not app.func.canInteract) or not app.func.hovering:
-        playerX = getPixX(app, app.player.x)
-        right = event.x > playerX
-        app.player.hit(app, right)
+        curInv = app.player.inventory[app.func.selectedInventory]
+        if hasattr(curInv, "food") and curInv.food:
+            if app.player.health == 10:
+                return
+            app.player.eat(curInv)
+            curInv.count -= 1
+            if curInv.count == 0:
+                app.player.inventory[app.func.selectedInventory] = None
+        else:
+            playerX = getPixX(app, app.player.x)
+            right = event.x > playerX
+            app.player.hit(app, right)
 
 def mouseReleased(app, event):
     if not app.paused: app.func.holding = None
@@ -142,6 +151,9 @@ def drawDebug(app, canvas: tkinter.Canvas):
 def drawHotbar(app, canvas: tkinter.Canvas):
     width = 9 * 28 + 40
     itemWidth = int((width - 40) / 9)
+    canvas.create_rectangle(app.width - width - 8, 12,
+                            app.width, 20 + itemWidth,
+                            fill="slate gray", width=0)
     for i, item in enumerate(app.player.inventory):
         x = 8 + (i * (itemWidth + 4))
         selected = app.func.selectedInventory == i
@@ -200,6 +212,7 @@ def drawDeath(app, canvas):
                         text="Press any key to continue", font=("Arial", "22"), fill="#9A9A9A")
 
 def redrawAll(app, canvas:tkinter.Canvas):
+    app.entities = []
     if app.deathScreen:
         drawDeath(app, canvas)
     else:
@@ -211,6 +224,8 @@ def redrawAll(app, canvas:tkinter.Canvas):
         drawHotbar(app, canvas)
         if app.func.keybinds:
             drawSettings(app, canvas)
+    for entity in app.entities:
+        canvas.tag_raise(entity)
 
 def timerFired(app):
     if not app.paused:
@@ -233,6 +248,7 @@ def timerFired(app):
         FUNC
         """
         app.func.handleKeys(app)
+        app.func.updateHovering(app)
         if app.func.holding and time() - app.func.holding > 0.1:
             app.func.handleClick(app)
             app.func.holding = None

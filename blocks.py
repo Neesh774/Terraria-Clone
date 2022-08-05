@@ -1,7 +1,7 @@
 from helpers import *
 
 class Block:
-    def __init__(self, x, y, block: Blocks, chunkInd, solid = True, breakable = True, color="black"):
+    def __init__(self, x, y, block: Blocks, chunkInd, solid = True, breakable = True, color="black", mineLevel = 0):
         self.x = x
         self.y = y
         self.type = block
@@ -10,6 +10,7 @@ class Block:
         self.breakable = breakable
         self.image = None
         self.color = color
+        self.mineLevel = mineLevel
         
     def load(self, app, canvas):
         image = getImage(app, self.type.name)

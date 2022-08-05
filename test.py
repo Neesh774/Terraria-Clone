@@ -26,8 +26,8 @@ def redrawAll(app, canvas):
     for x in range(app.width // 2):
         for y in range(app.height // 2):
             color = app.colors[(x, y)]
-            color = "#%02x%02x%02x" % (int(color[0]), int(color[1]), int(color[2]))
-            canvas.create_rectangle(x * 2, y * 2, (x + 1) * 2, (y + 1) * 2, fill=color)
+            color = "#%02x%02x%02x" % (int(color[0] + 5) % 255, int(color[1] + 5) % 255, int(color[2] + 5) % 255)
+            canvas.create_rectangle(x * 2, y * 2, (x + 1) * 2, (y + 1) * 2, fill=color, width=0)
         
 def main():
     pim = Image.open('image.png').convert('RGB')
