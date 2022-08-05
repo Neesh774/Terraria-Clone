@@ -71,7 +71,7 @@ class Chunk:
         return self.x <= x and x < self.x + CHUNK_SIZE
 
     def generateAir(self, app, block: Block):
-        if not self.inChunk(block.x - 1):
+        if not self.inChunk(block.x - 1): # check if left is not in chunk
             leftChunk = app.game.getChunk(app, self.index - 1)
             if (block.x - 1, block.y) not in leftChunk.blocks:
                 leftChunk.blocks[(block.x - 1, block.y)] = Air(block.x - 1, block.y,
@@ -79,7 +79,7 @@ class Chunk:
         elif (block.x - 1, block.y) not in self.blocks:
             self.blocks[(block.x - 1, block.y)] = Air(block.x - 1, block.y,
                                                         self.index)
-        if not self.inChunk(block.x + 1):
+        if not self.inChunk(block.x + 1): # check if right is not in chunk
             rightChunk = app.game.getChunk(app, self.index + 1)
             if (block.x + 1, block.y) not in rightChunk.blocks:
                 rightChunk.blocks[(block.x + 1, block.y)] = Air(block.x + 1, block.y,
@@ -87,7 +87,7 @@ class Chunk:
         elif (block.x + 1, block.y) not in self.blocks:
             self.blocks[(block.x + 1, block.y)] = Air(block.x + 1, block.y,
                                                         self.index)
-        if (block.x, block.y + 1) not in self.blocks:
+        if (block.x, block.y + 1) not in self.blocks and block.y < BUILD_HEIGHT:
             self.blocks[(block.x, block.y + 1)] = Air(block.x, block.y + 1,
                                                         self.index)
         if (block.x, block.y - 1) not in self.blocks:
@@ -143,8 +143,6 @@ class Game:
             self.chunks[i] = Chunk(app, chunkX, i, startY=startY, closePoints=closePoints)
             startY = self.chunks[i].endY
         
-        self.chunks[9].mobs.append(Slime(app, 5, GROUND_LEVEL + 1))
-
         self.loaded = []
 
     def generateChunk(self, app, right):
@@ -201,6 +199,10 @@ class Game:
             class_ = getattr(module, item.name.capitalize())
             chunk.blocks[(block.x, block.y)] = class_(block.x, block.y, block.chunkInd)
             chunk.generateAir(app, chunk.blocks[(block.x, block.y)])
+            item.count -= 1
+            if item.count == 0:
+                item = None
+            app.player.inventory[app.func.selectedInventory] = item
             return True
     
     def spawnMob(self, app):
@@ -225,7 +227,10 @@ class Game:
         onGround = isOnGround(app, x, y)
         if not onGround:
             return
-        if y > GROUND_LEVEL:
+        for mob in chunk.mobs:
+            if mob.x - 1 < x < mob.x + 1 and mob.y - 1 < y < mob.y + 1:
+                return
+        if y > GROUND_LEVEL and isNight:
             mob = Mushroom(app, x, y)
         else:
             mob = Slime(app, x, y)
@@ -236,7 +241,7 @@ class Player(Entity):
     def __init__(self):
         super().__init__(0.1, GROUND_LEVEL)
         self.chunk = 9
-        self.inventory = [InventoryItem("DIRT", STACK_MAX, True)] + [None] * 8
+        self.inventory = [InventoryItem("DIRT", STACK_MAX, True), InventoryItem("DIRT", STACK_MAX, True)] + [None] * 7
         self.orient = 1
         self.health = 10
         self.falling = 0
@@ -333,9 +338,18 @@ class Player(Entity):
         
         # check around respawn point for valid spawn point
         block = getBlockFromCoords(app, self.respawnPoint[0], self.respawnPoint[1])
-        while block and block.solid:
-            self.respawnPoint = (self.respawnPoint[0] + 1, self.respawnPoint[1])
-            block = getBlockFromCoords(app, self.respawnPoint[0], self.respawnPoint[1])
+        tries = 0
+        while (block and block.solid) or (not block):
+            rand = random.randint(-2, 2)
+            x = math.floor(self.respawnPoint[0] + rand)
+            y = math.floor(self.respawnPoint[1] + rand)
+            block = getBlockFromCoords(app, x, y)
+            if block and not block.solid:
+                self.respawnPoint = (x, y)
+                break
+            tries += 1
+            if tries > 16:
+                break
         self.x, self.y = self.respawnPoint
         self.health = 10
         self.falling = 0
@@ -447,15 +461,9 @@ class Functionality:
     
     def handleClick(self, app):
         if self.hovering and self.canInteract:
-            curInv = app.player.inventory[self.selectedInventory]
             if self.hovering.breakable:
                 app.game.breakBlock(app, self.hovering)
-            elif curInv and curInv.canPlace and self.hovering.type == Blocks.AIR:
-                if app.game.placeBlock(app, curInv, self.hovering):
-                    curInv.count -= 1
-                    if curInv.count == 0:
-                        curInv = None
-                    app.player.inventory[self.selectedInventory] = curInv
+                    
         self.updateHovering(app)
 
 class Mushroom(Entity):
@@ -596,6 +604,14 @@ class Slime(Entity):
                 self.moveRight()
             elif self.x > app.player.x:
                 self.moveLeft()
+        else:
+            randomWillMove = random.randint(0, 50)
+            if randomWillMove == 0:
+                randomDir = random.randint(0, 1)
+                if randomDir == 0:
+                    self.moveRight()
+                else:
+                    self.moveLeft()
         
         if self.damageCooldown > 0:
             self.damageCooldown -= 0.2

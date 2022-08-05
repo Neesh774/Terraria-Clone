@@ -74,11 +74,6 @@ def mousePressed(app, event):
 
         elif curInv and curInv.canPlace and app.func.hovering.type == Blocks.AIR:
             app.game.placeBlock(app, curInv, app.func.hovering)
-            curInv.count -= 1
-            if curInv.count == 0:
-                curInv = None
-
-            app.player.inventory[app.func.selectedInventory] = curInv
         app.func.updateHovering(app)
     elif (app.func.hovering and not app.func.canInteract) or not app.func.hovering:
         playerX = getPixX(app, app.player.x)
@@ -163,15 +158,15 @@ def drawHotbar(app, canvas: tkinter.Canvas):
                                 image=getImage(app, item.name))
         canvas.create_text(left + 4, 10, anchor="nw", text=item.count if item else "",
                            font=app.smallFont, fill="#38332F")
-    healthWidth = 16 * 10 + 5
     for h in range(0, 10):
-        canvas.create_image(app.width - healthWidth + (h-1) * 18, 64,
+        x = app.width - h * 18 - 20
+        canvas.create_image(x, 64,
                             image=getImage(app, "emptyHeart", (16, 16)))
         if h == app.player.health - 0.5:
-            canvas.create_image(app.width - healthWidth + (h - 1) * 18, 64,
+            canvas.create_image(x, 64,
                                 image=getImage(app, "halfHeart", (16, 16)))
         elif h < app.player.health:
-            canvas.create_image(app.width - healthWidth + (h - 1) * 18, 64,
+            canvas.create_image(x, 64,
                                 image=getImage(app, "heart", (16, 16)))
     
 def drawSettings(app, canvas):
@@ -231,7 +226,9 @@ def timerFired(app):
         for chunk in app.game.loaded:
             chunk.update(app)
 
-        app.game.spawnMob(app)
+        randomChance = random.randint(0, 50)
+        if randomChance == 0:
+            app.game.spawnMob(app)
         """
         FUNC
         """
