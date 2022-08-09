@@ -10,6 +10,10 @@ from settings import *
 from assets.colors import colors
 import numpy as np
 
+from pygame.key import *
+from pygame.locals import *
+import pygame
+
 
 class Blocks(Enum):
     AIR = -1
@@ -204,11 +208,11 @@ def checkBackground(app):
     if min(app.game.bgX) > 0: # Left
             app.game.bgX = [0] + app.game.bgX
     if max(app.game.bgX) < app.width: # Right
-            app.game.bgX = app.game.bgX + [max(app.game.bgX) + app.background.width()]
+            app.game.bgX = app.game.bgX + [max(app.game.bgX) + app.background.get_width()]
 
     newList = []
     for i in app.game.bgX: # Garbage Collector
-        if i > - app.background.width():
+        if i > - app.background.get_width():
             newList.append(i)
         if i < app.width:
             newList.append(i)
@@ -386,3 +390,7 @@ def getPath(app, x1, y1, x2, y2, depth = 0, path = [], maxDepth = 5):
             return path
         path.pop()
     return False
+
+def keyIsNumber(k):
+    nums = [pygame.K_0, pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4, pygame.K_5, pygame.K_6, pygame.K_7, pygame.K_8, pygame.K_9]
+    return k in nums

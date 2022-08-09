@@ -15,22 +15,15 @@ class Block:
         self.mineLevel = mineLevel
         for key, value in kwargs.items():
             setattr(self, key, value)
-        
-    def load(self, app, canvas):
-        image = getImage(app, self.type.name)
-        if image == None:
-            return
-        self.image = canvas.create_image(getPixX(app, self.x), getPixY(app, self.y),
-                            anchor="nw", image=image)
 
-    def drawWrapper(self, app, canvas):
+    def drawWrapper(self, app, screen):
         x, y = getPixFromCoords(app, self.x, self.y)
         if app.func.goodGraphics:
             image = getImage(app, self.type.name)
             if image != None:
-                canvas.create_image(x, y, anchor="nw", image=image)
+                screen.blit(image, (x, y))
         else:
-            self.draw(app, canvas, x, y)
+            self.draw(app, screen, x, y)
 
         if app.func.hovering and app.func.hovering == self:
             if not app.func.canInteract:
@@ -42,12 +35,11 @@ class Block:
                 width = heldTime / 0.2 * 5
             else:
                 width = 1
-            app.func.hoveringRect = canvas.create_rectangle(x, y, x + UNIT_WH, y + UNIT_WH,
-                                    outline=outline, width=width)
+            pygame.draw.rect(screen, outline (x, y, x + UNIT_WH, y + UNIT_WH),
+                                width)
     
-    def draw(self, app, canvas, x, y):
-        canvas.create_rectangle(x, y, x + UNIT_WH, y + UNIT_WH,
-                            fill=self.color, width=0)
+    def draw(self, app, screen, x, y):
+        pygame.draw.rect(screen, self.color, (x, y, x + UNIT_WH, y + UNIT_WH), 0)
 
     def __str__(self):
         return f"""({self.x}, {self.y}) {self.type.name} C: {self.chunkInd}\n

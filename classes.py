@@ -1,3 +1,4 @@
+from curses import KEY_ENTER
 import math
 from pprint import pprint
 import random
@@ -8,6 +9,10 @@ from items import *
 from settings import *
 from recipes import *
 from mobs import *
+
+import pygame
+from pygame.locals import *
+from pygame.key import *
 
 class Chunk:
     def __init__(self, app, x, chunkI,
@@ -113,12 +118,6 @@ class Chunk:
                             del rightChunk.blocks[(x, y)]
                 elif ((x, y) in self.blocks and self.blocks[(x, y)].type == Blocks.AIR) and nearbySolids == 0:
                     del self.blocks[(x, y)]
-
-    def load(self, app, canvas):
-        for b in self.blocks:
-            block = self.blocks[b]
-            if not block.image:
-                block.load(app, canvas)
     
     def update(self, app):
         for item in self.items:
@@ -155,7 +154,7 @@ class Game:
     def __init__(self, app):
         self.chunks = {}
         self.time = 0
-        self.bgX = [0, app.background.width(), -app.background.width()]
+        self.bgX = [0, app.background.get_width(), -app.background.get_width()]
         startY = GROUND_LEVEL
         for i in range(20):
             chunkX = (i - 10) * CHUNK_SIZE + 2
@@ -196,13 +195,11 @@ class Game:
             if chunk.inChunk(x):
                 return ci
 
-    def loadChunks(self, app, canvas):
+    def loadChunks(self, app):
         chunksOnScreen = int(app.width / (CHUNK_SIZE * UNIT_WH)) + 2
         startChunkIndex = app.player.chunk - math.floor(chunksOnScreen / 2)
         endChunkIndex = startChunkIndex + chunksOnScreen
         self.loaded = [self.chunks[i] for i in self.chunks if startChunkIndex <= i <= endChunkIndex]
-        for chunk in self.loaded:
-            chunk.load(app, canvas)
     
     def breakBlock(self, app, block: Block, drop=True):
         chunk = self.getChunk(app, block.chunkInd)
@@ -493,27 +490,26 @@ class Functionality:
         """
         FUNC
         """
-        if "k" == key or (self.keybinds and "Escape" == key):
+        if key == K_k or (self.keybinds and key == K_ESCAPE):
             self.keybinds = not self.keybinds
         if self.keybinds:
             return
-        if "/" == key:
+        if key == K_SLASH:
             self.debug = not self.debug
-        if key.isnumeric():
-            num = int(key)
-            if num != 0: self.selectedInventory = num - 1
-        if "g" == key:
+        if keyIsNumber(key):
+            if key != K_0: self.selectedInventory = key - 48
+        if key == K_g:
             self.goodGraphics = not self.goodGraphics
-        if "-" == key and self.debug:
+        if key == K_MINUS and self.debug:
             rand = random.randint(0, 1)
             chunk = app.game.getChunk(app, app.player.chunk)
             if rand == 0:
                 chunk.mobs.append(Mushroom(app, app.player.x, app.player.y))
             else:
                 chunk.mobs.append(Slime(app, app.player.x, app.player.y))
-        if "e" == key:
+        if key == K_e:
             self.isCrafting = not self.isCrafting
-        if "Right" == key and self.isCrafting:
+        if key == K_RIGHT and self.isCrafting:
             self.craftingSelected += 1
             slot_wh = 24
             totalWidth = app.width * 0.8
@@ -525,7 +521,7 @@ class Functionality:
                     self.craftingPage = len(app.player.canCraft) - 1
             elif self.craftingSelected >= len(app.player.canCraft):
                 self.craftingSelected -= 1
-        elif "Left" == key and self.isCrafting:
+        elif key == K_LEFT and self.isCrafting:
             self.craftingSelected -= 1
             slot_wh = 24
             totalWidth = app.width * 0.8
@@ -538,38 +534,37 @@ class Functionality:
                 self.craftingPage -= 1
                 if self.craftingPage < 0:
                     self.craftingPage = 0
-        elif ("Return" == key or "Enter" == key) and self.isCrafting:
+        elif key == K_RETURN or key == KEY_ENTER and self.isCrafting:
             if app.func.craftingSelected < len(app.player.canCraft):
                 recipe = app.player.canCraft[app.func.craftingSelected]
                 if canBeMade(app, recipe):
                     makeRecipe(app, recipe)
                     app.player.updateCanCraft(app)
         
-        if "+" == key and self.debug:
+        if key == K_PLUS and self.debug:
             print(eval(input(">> ")))
         """
         PLAYER
         """
-        if key.isupper():
+        if KMOD_LSHIFT:
             app.player.sneak = True
             slow = 0.5
-            key = key.lower()
         else:
             app.player.sneak = False
             slow = 1
 
-        if "w" == key and isOnGround(app, app.player.x, app.player.y):
+        if key == K_w and isOnGround(app, app.player.x, app.player.y):
             app.player.dy -= 0.8 * slow
         
-        if "a" == key:
+        if key == K_a:
             app.player.moveLeft(app, -0.8 * slow)
-        elif "d" == key:
+        elif key == K_d:
             app.player.moveRight(app, 0.8 * slow)
         checkBackground(app)
-        if "s" == key:
+        if key == K_s:
             app.player.moveDown(app)
 
-        if "q" == key:
+        if key == K_q:
             app.player.throwItem(app, app.player.inventory[self.selectedInventory],
                                  inInventory=True)
 
