@@ -115,12 +115,16 @@ def drawChunk(app, canvas: tkinter.Canvas, chunk: Chunk):
 def drawGame(app, canvas: tkinter.Canvas):
     canvas.create_rectangle(0, 0, app.width, app.height,
                             fill=getBackgroundColor(app.game.time))
+
     canvas.create_rectangle(0, app.height * 0.5, app.width, app.height,
-                            fill="#2D404F")
+                            fill="#2D404F", width=0)
 
     for bgX in app.game.bgX:
         canvas.create_image(bgX, app.height * 0.5, image=app.background, anchor="e")
-
+    
+    canvas.create_rectangle(0, getPixY(app, GROUND_LEVEL - GRASS_LEVEL - TERRAIN_VARIATION),
+                            app.width, app.height, fill="grey2", width=0)
+    
     for chunk in app.game.loaded:
         drawChunk(app, canvas, chunk)
     if app.func.hoveringRect:
@@ -233,6 +237,8 @@ def drawCrafting(app, canvas):
         if (startInd + i) >= numCrafts:
             break
         craft = app.player.canCraft[startInd + i]["output"]
+        if not craft:
+            continue
         if app.func.craftingSelected == startInd + i:
             borderWidth = 2
         else:
@@ -246,6 +252,8 @@ def drawCrafting(app, canvas):
                             app.height * 0.85 + 2, 
                             image=getImage(app, craft.name, resize=(slot_wh - 2, slot_wh - 2)))
         canCraftNum = numCanCraft(app, app.player.canCraft[startInd + i])
+        if not canCraftNum:
+            continue
         canvas.create_text(app.width * 0.1 + 8 + (i * (slot_wh + 12)),
                             app.height * 0.85 - (slot_wh / 2) + 5,
                             text=canCraftNum * craft.count,

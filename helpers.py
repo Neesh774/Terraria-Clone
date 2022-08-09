@@ -244,8 +244,8 @@ def generateTerrain(y1, y2, displace=1, length=0):
     return (generateTerrain(y1, midpoint, int(displace * 0.5), length) +
         generateTerrain(midpoint, y2, int(displace * 0.5), length))
     
-def belowSurface(app, block):
-    if block.y <= GROUND_LEVEL - GRASS_LEVEL - TERRAIN_VARIATION:
+def belowSurface(app, y):
+    if y <= GROUND_LEVEL - GRASS_LEVEL - TERRAIN_VARIATION:
         return True
     return False
 

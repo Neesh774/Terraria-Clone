@@ -64,7 +64,7 @@ class Air(Block):
         super().__init__(app, x, y, Blocks.AIR, chunkInd, solid=0, breakable=False,
                          color="grey2")
     def draw(self, app, canvas, x, y):
-        if belowSurface(app, self):
+        if belowSurface(app, y):
             canvas.create_rectangle(x, y, x + UNIT_WH, y + UNIT_WH,
                                 fill="grey13", width=0)
 class Grass(Block):
@@ -100,7 +100,7 @@ class Platform(Block):
     def draw(self, app, canvas, x, y):
         canvas.create_rectangle(x, y, x + UNIT_WH, y + (UNIT_WH / 2),
                                 fill=self.color, width=0)
-        if belowSurface(app, self):
+        if belowSurface(app, y):
             canvas.create_rectangle(x, y + (UNIT_WH / 2), x + UNIT_WH, y + UNIT_WH,
                                 fill="grey13", width=0)
 

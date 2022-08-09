@@ -599,6 +599,7 @@ class Functionality:
             distance = math.dist(blockPix, playerPix)
             x = app.player.x
             y = app.player.y
+            
             onPlayer = (withinBounds(coords[0], coords[1], coords[0] + 1, coords[1] + 1, x, y + 0.4)
                 or withinBounds(coords[0], coords[1], coords[0] + 1, coords[1] + 1, x + 0.8, y + 0.4))
 
