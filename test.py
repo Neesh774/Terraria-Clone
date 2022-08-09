@@ -1,38 +1,113 @@
-from PIL import Image
-import numpy as np
-from cmu_112_graphics import *
+import random
 
-# Load image, ensure not palettised, and make into Numpy array
+def makeMaze(maze):
+    valid = checkMazeValid(maze)
+    if valid == 1:
+        return maze
+    intersection = (random.randint(1, len(maze[0]) - 2), random.randint(1, len(maze) - 2))
+    tries = 0
+    while checkChamber(maze, intersection[0], intersection[1]):
+        intersection = (random.randint(1, len(maze[0]) - 2), random.randint(1, len(maze) - 2))
+        tries += 1
+        if tries > 100:
+            return maze
+    wallWithoutHole = random.randint(0, 3)
+    maze[intersection[0]][intersection[1]] = 1
+    for i in range(0, 4):
+        dx, dy = 0, 0
+        if i == 0:
+            dx = -1
+        elif i == 1:
+            dy = 1
+        elif i == 2:
+            dx = 1
+        elif i == 3:
+            dy = -1
+        maze = makeWall(maze, intersection[0] + dx, intersection[1] + dy, i, i != wallWithoutHole)
+    return makeMaze(maze)
 
-def getColors():
-    pim = Image.open('image.png').convert('RGB')
-    im  = np.array(pim)
-
-    colors = {}
-
-    for x in range(im.shape[1]):
-        for y in range(im.shape[0]):
-            colors[(x, y)] = im[y, x]
+def makeWall(maze, x, y, wall, hasHole):
+    if wall == 0: # top
+        wallY = y
+        if hasHole:
+            hole = random.randint(0, x)
+            while x >= 0 and maze[x][wallY] != 1:
+                maze[x][wallY] = 1 if x != hole else 0
+                x -= 1
+        else:
+            while x >= 0 and maze[x][wallY] != 1:
+                maze[x][wallY] = 1
+                x -= 1
     
+    elif wall == 1: # right
+        wallX = x
+        if hasHole:
+            hole = random.randint(y, len(maze) - 1)
+            while y < len(maze) and maze[wallX][y] != 1:
+                maze[wallX][y] = 1 if y != hole else 0
+                y += 1
+        else:
+            while y < len(maze) and maze[wallX][y] != 1:
+                maze[wallX][y] = 1
+                y += 1
     
-    width = im.shape[1]
-    height = im.shape[0]
-    return (colors, width, height)
+    elif wall == 2: # bottom
+        wallY = y
+        if hasHole:
+            hole = random.randint(x, len(maze[0]) - 1)
+            while x < len(maze[0]) and maze[x][wallY] != 1:
+                maze[x][wallY] = 1 if x != hole else 0
+                x += 1
+        else:
+            while x < len(maze[0]) and maze[x][wallY] != 1:
+                maze[x][wallY] = 1
+                x += 1
+    
+    elif wall == 3: # left
+        wallX = x
+        if hasHole:
+            hole = random.randint(0, y)
+            while y >= 0 and maze[wallX][y] != 1:
+                maze[wallX][y] = 1 if y != hole else 0
+                y -= 1
+        else:
+            while y >= 0 and maze[wallX][y] != 1:
+                maze[wallX][y] = 1
+                y -= 1
+    return maze
 
-def appStarted(app):
-    app.colors, app.imW, app.imY = getColors()
+def checkChamber(maze, x, y):
+    numWalls = 0
+    for i in range(x - 1, x + 2):
+        for j in range(y - 1, y + 2):
+            if 0 < i < len(maze) and 0 < j < len(maze[0]):
+                numWalls += maze[i][j]
+    return numWalls
 
-def redrawAll(app, canvas):
-    for x in range(app.width // 2):
-        for y in range(app.height // 2):
-            color = app.colors[(x, y)]
-            color = "#%02x%02x%02x" % (int(color[0] + 5) % 255, int(color[1] + 5) % 255, int(color[2] + 5) % 255)
-            canvas.create_rectangle(x * 2, y * 2, (x + 1) * 2, (y + 1) * 2, fill=color, width=0)
-        
-def main():
-    pim = Image.open('image.png').convert('RGB')
-    im  = np.array(pim)
-    runApp(width=im.shape[1]*2, height=im.shape[0]*2)
+def checkMazeValid(maze):
+    for i in range(0, len(maze)):
+        for j in range(0, len(maze[0])):
+            if checkChamber(maze, i, j) == 0:
+                return 0
+    return 1
 
-if __name__ == "__main__":
-    main()
+def printMaze(maze):
+    for i in range(0, len(maze) + 1):
+        print("__", end="")
+    print()
+    for i in range(0, len(maze)):
+        print("|", end="")
+        for j in range(0, len(maze[0])):
+            if maze[i][j] == 1:
+                print("[]", end="")
+            elif maze[i][j] == 0:
+                print("  ", end="")
+        print("|")
+    for i in range(0, len(maze) + 1):
+        print("--", end="")
+    print()
+
+def emptyMaze(size):
+    return [[0 for i in range(0, size)] for j in range(0, size)]
+
+printMaze(makeMaze(emptyMaze(10)))

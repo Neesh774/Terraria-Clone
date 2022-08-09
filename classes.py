@@ -1,10 +1,13 @@
 import math
+from pprint import pprint
 import random
 from PIL import Image,ImageTk
 from helpers import *
 from blocks import *
 from items import *
 from settings import *
+from recipes import *
+from mobs import *
 
 class Chunk:
     def __init__(self, app, x, chunkI,
@@ -24,23 +27,30 @@ class Chunk:
 
         # returns a height for every point in the chunk
         terrain = generateTerrain(self.startY, self.endY)
+        chunkTrees = 0
         for i in range(CHUNK_SIZE):
             height = terrain[i]
             row_ground_level = height
             row_grass_level = height - GRASS_LEVEL - random.randint(0, 2)
             row_dirt_level = height - DIRT_LEVEL - random.randint(-1, 1)
-            for r in range(row_ground_level, -1, -1):
-                if r == row_ground_level: # 24
-                    block = Air(x+i, r, chunkI)
+            for r in range(row_ground_level + 1, -1, -1):
+                if r >= row_ground_level: # 24
+                    block = Air(app, x+i, r, chunkI)
                 elif r >= row_grass_level: # 9
-                    block = Grass(x+i, r, chunkI)
+                    block = Grass(app, x+i, r, chunkI)
                 elif r > row_dirt_level: # 4
-                    block = Dirt(x+i, r, chunkI)
+                    block = Dirt(app, x+i, r, chunkI)
                 elif r > 0: # 0
-                    block = Stone(x+i, r, chunkI)
+                    block = Stone(app, x+i, r, chunkI)
                 else: # -1
-                    block = Bedrock(x+i, r, chunkI)
+                    block = Bedrock(app, x+i, r, chunkI)
                 self.blocks[(x+i, r)] = block
+                
+            if random.randint(0, 15) == 0 and chunkTrees < 3:
+                chunkTrees += 1
+                treeHeight = random.randint(8, 14)
+                for j in range(0, treeHeight):
+                    self.blocks[(x + i, row_ground_level + j)] = Log(app, x + i, row_ground_level + j, chunkI, natural=True)
         
         # Create random points to make caves at
         for i in range(random.randint(0, 7)):
@@ -62,8 +72,8 @@ class Chunk:
                     randomChance = random.randint(-1, 2)
                     if ((i, j) in self.blocks and dist <= (rad + randomChance)
                         and self.blocks[(i, j)].breakable):
-                        self.blocks[(i, j)] = Air(i, j, chunkI)
-                    
+                        self.blocks[(i, j)] = Air(app, i, j, chunkI)
+    
     def getRange(self, app):
         return self.x, self.x + CHUNK_SIZE
     
@@ -71,28 +81,38 @@ class Chunk:
         return self.x <= x and x < self.x + CHUNK_SIZE
 
     def generateAir(self, app, block: Block):
-        if not self.inChunk(block.x - 1): # check if left is not in chunk
-            leftChunk = app.game.getChunk(app, self.index - 1)
-            if (block.x - 1, block.y) not in leftChunk.blocks:
-                leftChunk.blocks[(block.x - 1, block.y)] = Air(block.x - 1, block.y,
+        for x in range(block.x - 1, block.x + 2):
+            for y in range(block.y - 1, block.y + 2):
+                if not self.inChunk(x):
+                    if x <= self.x:
+                        leftChunk = app.game.getChunk(app, self.index - 1)
+                        if (x, y) not in leftChunk.blocks:
+                            leftChunk.blocks[(x, y)] = Air(app, x, y,
                                                         self.index - 1)
-        elif (block.x - 1, block.y) not in self.blocks:
-            self.blocks[(block.x - 1, block.y)] = Air(block.x - 1, block.y,
-                                                        self.index)
-        if not self.inChunk(block.x + 1): # check if right is not in chunk
-            rightChunk = app.game.getChunk(app, self.index + 1)
-            if (block.x + 1, block.y) not in rightChunk.blocks:
-                rightChunk.blocks[(block.x + 1, block.y)] = Air(block.x + 1, block.y,
+                    elif x >= self.x + CHUNK_SIZE:
+                        rightChunk = app.game.getChunk(app, self.index + 1)
+                        if (x, y) not in rightChunk.blocks:
+                            rightChunk.blocks[(x, y)] = Air(app, x, y,
                                                         self.index + 1)
-        elif (block.x + 1, block.y) not in self.blocks:
-            self.blocks[(block.x + 1, block.y)] = Air(block.x + 1, block.y,
+                elif ((x, y) not in self.blocks):
+                    self.blocks[(x, y)] = Air(app, x, y,
                                                         self.index)
-        if (block.x, block.y + 1) not in self.blocks and block.y < BUILD_HEIGHT:
-            self.blocks[(block.x, block.y + 1)] = Air(block.x, block.y + 1,
-                                                        self.index)
-        if (block.x, block.y - 1) not in self.blocks:
-            self.blocks[(block.x, block.y - 1)] = Air(block.x, block.y - 1,
-                                                        self.index)
+    
+    def ungenerateAir(self, app, block: Block):
+        for x in range(block.x - 1, block.x + 2):
+            for y in range(block.y - 1, block.y + 2):
+                nearbySolids = len(nearbySolid(app, x, y))
+                if not self.inChunk(x):
+                    if x <= self.x:
+                        leftChunk = app.game.getChunk(app, self.index - 1)
+                        if (x, y) in leftChunk.blocks and leftChunk.blocks[(x, y)].type == Blocks.AIR and nearbySolids == 0:
+                            del leftChunk.blocks[(x, y)]
+                    elif x >= self.x + CHUNK_SIZE:
+                        rightChunk = app.game.getChunk(app, self.index + 1)
+                        if (x, y) in rightChunk.blocks and rightChunk.blocks[(x, y)].type == Blocks.AIR and nearbySolids == 0:
+                            del rightChunk.blocks[(x, y)]
+                elif ((x, y) in self.blocks and self.blocks[(x, y)].type == Blocks.AIR) and nearbySolids == 0:
+                    del self.blocks[(x, y)]
 
     def load(self, app, canvas):
         for b in self.blocks:
@@ -104,12 +124,15 @@ class Chunk:
         for item in self.items:
             item.updateWrapper(app, self)
             if item.x < self.x or item.x > self.x + CHUNK_SIZE:
-                self.items.remove(item)
-                if item.x < self.x:
-                    newChunk = app.game.getChunk(app, self.index - 1)
-                else:
-                    newChunk = app.game.getChunk(app, self.index + 1)
-                newChunk.items.append(item)
+                try:
+                    self.items.remove(item)
+                    if item.x < self.x:
+                        newChunk = app.game.getChunk(app, self.index - 1)
+                    else:
+                        newChunk = app.game.getChunk(app, self.index + 1)
+                    newChunk.items.append(item)
+                except Exception:
+                    pass
         
         for mob in self.mobs:
             mob.updateWrapper(app)
@@ -185,9 +208,31 @@ class Game:
         chunk = self.getChunk(app, block.chunkInd)
         block = chunk.blocks[(block.x, block.y)]
         item = Item(block.type.name, block.x, block.y, block.chunkInd, canPlace=True)
-        chunk.blocks[(block.x, block.y)] = Air(block.x, block.y, block.chunkInd)
-        chunk.generateAir(app, block)
-        chunk.items.append(item)
+        if block.type.name == "LOG" and block.natural: # breaking whole tree
+            # get to bottom of tree
+            while ((block.x, block.y - 1) in chunk.blocks and
+                chunk.blocks[(block.x, block.y - 1)].type.name == "LOG" and
+                chunk.blocks[(block.x, block.y - 1)].natural):
+                block = chunk.blocks[(block.x, block.y - 1)]
+            # break every log in the tree
+            while block.type.name == "LOG" and block.natural:
+                chunk.blocks[(block.x, block.y)] = Air(app, block.x, block.y, block.chunkInd)
+                randPos = random.random() * 0.8 - 0.4
+                item = Item(block.type.name, block.x + randPos, block.y,
+                            block.chunkInd, canPlace=True,
+                            dx=randPos, dy=-0.2)
+                chunk.generateAir(app, block) # add air around block
+                chunk.ungenerateAir(app, block) # remove air that isn't in contact with a solid block
+                chunk.items.append(item)
+                if (block.x, block.y + 1) in chunk.blocks:
+                    block = chunk.blocks[(block.x, block.y + 1)]
+                else:
+                    break
+        else: # any other type of block
+            chunk.blocks[(block.x, block.y)] = Air(app, block.x, block.y, block.chunkInd)
+            chunk.generateAir(app, block)
+            chunk.ungenerateAir(app, block)
+            chunk.items.append(item)
         return item
 
     def placeBlock(self, app, item: Item, block: Block):
@@ -197,7 +242,7 @@ class Game:
         if (block.x, block.y) in chunk.blocks:
             module = __import__("blocks")
             class_ = getattr(module, item.name.capitalize())
-            chunk.blocks[(block.x, block.y)] = class_(block.x, block.y, block.chunkInd)
+            chunk.blocks[(block.x, block.y)] = class_(app, block.x, block.y, block.chunkInd)
             chunk.generateAir(app, chunk.blocks[(block.x, block.y)])
             item.count -= 1
             if item.count == 0:
@@ -238,16 +283,36 @@ class Game:
         return mob
 
 class Player(Entity):
-    def __init__(self):
-        super().__init__(0.1, GROUND_LEVEL)
+    def __init__(self, app):
         self.chunk = 9
-        self.inventory = [Bread(), InventoryItem("DIRT", STACK_MAX, canPlace=True)] + [None] * 7
+        self.inventory = [InventoryItem("PLANKS", 32, True)] + [None] * 8
         self.orient = 1
         self.health = 10
         self.falling = 0
         self.respawnPoint = (0.1, GROUND_LEVEL)
+        self.canCraft = []
+
+
+        block = getBlockFromCoords(app, self.respawnPoint[0], self.respawnPoint[1])
+        tries = 0
+        while (block and block.solid) or (not block):
+            rand = random.randint(-2, 2)
+            x = math.floor(self.respawnPoint[0] + rand)
+            y = math.floor(self.respawnPoint[1] + rand)
+            block = getBlockFromCoords(app, x, y)
+            if block and not block.solid:
+                self.respawnPoint = (x, y)
+                break
+            tries += 1
+            if tries > 16:
+                break
+
+
+        super().__init__(self.respawnPoint[0], self.respawnPoint[1])
         self.sneak = False
         self.image = Image.open("assets/boris.png").resize((int(UNIT_WH * 0.8), int(UNIT_WH * 0.8)))
+    
+        self.suffocationDamage = True
     
     def getSprite(self):
         image = self.image.copy()
@@ -258,11 +323,13 @@ class Player(Entity):
     def pickUp(self, app, item: InventoryItem):
         for i in range(len(self.inventory)):
             if self.inventory[i] and self.inventory[i] == item and self.inventory[i].count < STACK_MAX:
-                self.inventory[i].count += item.count
+                self.inventory[i].addToCount(item.count)
+                self.updateCanCraft(app)
                 return
         for i in range(len(self.inventory)):
             if not self.inventory[i]:
                 self.inventory[i] = item
+                self.updateCanCraft(app)
                 return
         self.throwItem(app, item)
     
@@ -283,6 +350,16 @@ class Player(Entity):
                     self.inventory[app.func.selectedInventory] = None
                 else:
                     self.inventory[app.func.selectedInventory] = item
+        self.updateCanCraft(app)
+    
+    def removeItem(self, app, item, count = 1):
+        for i in range(len(self.inventory)):
+            if self.inventory[i] and self.inventory[i].name == item:
+                self.inventory[i].count -= count
+                if self.inventory[i].count == 0:
+                    self.inventory[i] = None
+                self.updateCanCraft(app)
+                return
 
     def update(self, app):
         if FALL_DAMAGE:
@@ -329,6 +406,11 @@ class Player(Entity):
             app.game.loaded.append(app.game.getChunk(app, chunkIndex))
         self.chunk = newChunk
         app.func.updateHovering(app)
+    
+    def moveDown(self, app):
+        curBlock = getBlockFromCoords(app, roundHalfUp(self.x), self.y - 1)
+        if curBlock and curBlock.solid == 0.5:
+            self.y = getBlockFromCoords(app, roundHalfUp(self.x), self.y - 1).y - 1
     
     def die(self, app):
         # drop items
@@ -381,6 +463,13 @@ class Player(Entity):
         if self.health > 10:
             self.health = 10
     
+    def updateCanCraft(self, app):
+        canCraft = []
+        for recipe in recipes:
+            if canBeMade(app, recipe):
+                canCraft.append(recipe)
+        self.canCraft = canCraft
+    
 class Functionality:
     def __init__(self, app):
         self.mouseX = 0
@@ -396,6 +485,9 @@ class Functionality:
         self.holding = None
         self.goodGraphics = False
         self.keybinds = False
+        self.isCrafting = False
+        self.craftingPage = 0
+        self.craftingSelected = 0
     
     def handleKey(self, app, key):
         """
@@ -419,6 +511,42 @@ class Functionality:
                 chunk.mobs.append(Mushroom(app, app.player.x, app.player.y))
             else:
                 chunk.mobs.append(Slime(app, app.player.x, app.player.y))
+        if "e" == key:
+            self.isCrafting = not self.isCrafting
+        if "Right" == key and self.isCrafting:
+            self.craftingSelected += 1
+            slot_wh = 24
+            totalWidth = app.width * 0.8
+            pageLength = int(totalWidth / (slot_wh + 12))
+            startInd = app.func.craftingPage * pageLength
+            if self.craftingSelected - startInd >= pageLength:
+                self.craftingPage += 1
+                if self.craftingPage * pageLength >= len(app.player.canCraft):
+                    self.craftingPage = len(app.player.canCraft) - 1
+            elif self.craftingSelected >= len(app.player.canCraft):
+                self.craftingSelected -= 1
+        elif "Left" == key and self.isCrafting:
+            self.craftingSelected -= 1
+            slot_wh = 24
+            totalWidth = app.width * 0.8
+            pageLength = int(totalWidth / (slot_wh + 12))
+            startInd = app.func.craftingPage * pageLength
+            if self.craftingSelected < 0:
+                self.craftingSelected = 0
+            elif self.craftingSelected < startInd:
+                self.craftingSelected = startInd - 1
+                self.craftingPage -= 1
+                if self.craftingPage < 0:
+                    self.craftingPage = 0
+        elif ("Return" == key or "Enter" == key) and self.isCrafting:
+            if app.func.craftingSelected < len(app.player.canCraft):
+                recipe = app.player.canCraft[app.func.craftingSelected]
+                if canBeMade(app, recipe):
+                    makeRecipe(app, recipe)
+                    app.player.updateCanCraft(app)
+        
+        if "+" == key and self.debug:
+            print(eval(input(">> ")))
         """
         PLAYER
         """
@@ -438,6 +566,8 @@ class Functionality:
         elif "d" == key:
             app.player.moveRight(app, 0.8 * slow)
         checkBackground(app)
+        if "s" == key:
+            app.player.moveDown(app)
 
         if "q" == key:
             app.player.throwItem(app, app.player.inventory[self.selectedInventory],
@@ -454,6 +584,12 @@ class Functionality:
             self.keys.pop(0)
     
     def updateHovering(self, app):
+        if self.isCrafting and withinBounds(app.width * 0.1, app.height * 0.76,
+                            app.width * 0.9, app.height * 0.90,
+                            self.mouseX, self.mouseY):
+            self.hovering = None
+            self.canInteract = False
+            return
         coords = getCoordsFromPix(app, self.mouseX, self.mouseY)
         if coords:
             self.hovering = getBlockFromCoords(app, coords[0], coords[1])
@@ -470,6 +606,7 @@ class Functionality:
             self.canInteract = ((not onPlayer) and distance < 4 and (not isBedrock)) or self.debug
         else:
             self.hovering = None
+            self.canInteract = False
     
     def handleClick(self, app):
         if self.hovering and self.canInteract:
@@ -477,212 +614,3 @@ class Functionality:
                 app.game.breakBlock(app, self.hovering)
                     
         self.updateHovering(app)
-
-class Mushroom(Entity):
-    def __init__(self, app, x, y):
-        super().__init__(x, y)
-        self.health = 5
-        self.viewRange = 10
-        self.attackRange = 1
-        self.orient = 1
-        self.damage = 0.5
-        self.damageCooldown = 0
-        self.idle = []
-        self.width = 32
-        self.height = 32
-        idleSprites = app.images["mush-idle"]
-        for i in range(14):
-            sprite = idleSprites.crop((32 * i, 0, 32 * (i + 1), 32))
-            self.idle.append(sprite)
-        self.run = []
-        runSprites = app.images["mush-run"]
-        for i in range(16):
-            sprite = runSprites.crop((32 * i, 0, 32 * (i + 1), 32))
-            self.run.append(sprite)
-        self.spriteIndex = 0
-        self.isHurt = -1
-        self.hurt = []
-        hurtSprites = app.images["mush-hit"]
-        for i in range(5):
-            sprite = hurtSprites.crop((32 * i, 0, 32 * (i + 1), 32))
-            self.hurt.append(sprite)
-    def update(self, app):
-        # check if player is in range
-        dist = math.dist((self.x, self.y), (app.player.x, app.player.y))
-        if dist < self.attackRange and self.damageCooldown == 0:
-            self.attack(app)
-        elif dist < self.viewRange and dist > 1:
-            if self.x < app.player.x:
-                self.moveRight()
-            elif self.x > app.player.x:
-                self.moveLeft()
-        
-        if self.damageCooldown > 0:
-            self.damageCooldown -= 0.2
-        if self.damageCooldown < 0:
-            self.damageCooldown = 0
-        
-        if self.isHurt >= 0:
-            self.isHurt += 1
-            if self.isHurt == 4:
-                self.isHurt = -1
-            self.spriteIndex = self.isHurt
-        elif self.dx != 0 or self.dy != 0:
-            self.spriteIndex = (self.spriteIndex + 1) % len(self.run)
-        else:
-            self.spriteIndex = (self.spriteIndex + 1) % len(self.idle)
-    
-    def draw(self, app, canvas):
-        x = getPixX(app, self.x)
-        y = getPixY(app, self.y)
-        if self.isHurt >= 0:
-            sprite = self.hurt[self.spriteIndex]
-        elif self.dx != 0 or self.dy != 0:
-            sprite = self.run[self.spriteIndex]
-        else:
-            sprite = self.idle[self.spriteIndex]
-        if self.orient == 1:
-            sprite = sprite.transpose(method=Image.Transpose.FLIP_LEFT_RIGHT)
-        canvas.create_image(x, y, image=ImageTk.PhotoImage(sprite))
-        
-    def moveRight(self):
-        self.dx += 0.05
-        self.orient = 1
-    def moveLeft(self):
-        self.dx -= 0.05
-        self.orient = -1
-    
-    def attack(self, app):
-        app.player.health -= self.damage
-        if self.x < app.player.x:
-            app.player.dy -= 0.2
-            app.player.dx += 0.2
-        else:
-            app.player.dy -= 0.2
-            app.player.dx -= 0.2
-        if app.player.health <= 0:
-            app.paused = True
-            app.deathScreen = True
-        self.damageCooldown = 5
-    
-    def takeDamage(self, app, damage):
-        self.health -= damage
-        if self.health <= 0:
-            self.die(app)
-        if app.player.x < self.x:
-            self.dx += 0.6
-        else:
-            self.dx -= 0.6
-        self.dy -= 0.2
-        self.isHurt = 0
-        self.spriteIndex = 0
-    
-    def die(self, app):
-        chunk = app.game.getChunk(app, app.game.getChunkIndex(self.x))
-        chunk.mobs.remove(self)
-        drop = Item("carrot", self.x, self.y, chunk, random.randint(1, 3), dy=-0.5, inventoryClass=Carrot)
-        chunk.items.append(drop)
-
-class Slime(Entity):
-    def __init__(self, app, x, y):
-        super().__init__(x, y)
-        self.health = 10
-        self.viewRange = 5
-        self.attackRange = 1
-        self.orient = 1
-        self.damage = 1
-        self.damageCooldown = 0
-        self.idle = []
-        self.width = 44
-        self.height = 30
-        idleSprites = app.images["slime-run"]
-        for i in range(10):
-            sprite = idleSprites.crop((44 * i, 0, 44 * (i + 1), 30))
-            self.idle.append(sprite)
-        self.spriteIndex = 0
-        self.isHurt = -1
-        self.hurt = []
-        hurtSprites = app.images["slime-hit"]
-        for i in range(5):
-            sprite = hurtSprites.crop((44 * i, 0, 44 * (i + 1), 30))
-            self.hurt.append(sprite)
-    def update(self, app):
-        # check if player is in range
-        dist = math.dist((self.x, self.y), (app.player.x, app.player.y))
-        if dist < self.attackRange and self.damageCooldown == 0:
-            self.attack(app)
-        elif dist < self.viewRange and dist > 1:
-            if self.x < app.player.x:
-                self.moveRight()
-            elif self.x > app.player.x:
-                self.moveLeft()
-        else:
-            randomWillMove = random.randint(0, 50)
-            if randomWillMove == 0:
-                randomDir = random.randint(0, 1)
-                if randomDir == 0:
-                    self.moveRight()
-                else:
-                    self.moveLeft()
-        
-        if self.damageCooldown > 0:
-            self.damageCooldown -= 0.2
-        if self.damageCooldown < 0:
-            self.damageCooldown = 0
-        
-        if self.isHurt >= 0:
-            self.isHurt += 1
-            if self.isHurt == 4:
-                self.isHurt = -1
-            self.spriteIndex = self.isHurt
-        else:
-            self.spriteIndex = (self.spriteIndex + 1) % len(self.idle)
-    
-    def draw(self, app, canvas):
-        x = getPixX(app, self.x)
-        y = getPixY(app, self.y)
-        if self.isHurt >= 0:
-            sprite = self.hurt[self.spriteIndex]
-        else:
-            sprite = self.idle[self.spriteIndex]
-        if self.orient == 1:
-            sprite = sprite.transpose(method=Image.Transpose.FLIP_LEFT_RIGHT)
-        app.entities.append(canvas.create_image(x, y, image=ImageTk.PhotoImage(sprite)))
-        
-    def moveRight(self):
-        self.dx += 0.05
-        self.orient = 1
-    def moveLeft(self):
-        self.dx -= 0.05
-        self.orient = -1
-    
-    def attack(self, app):
-        app.player.health -= self.damage
-        if self.x < app.player.x:
-            app.player.dy -= 0.2
-            app.player.dx += 0.2
-        else:
-            app.player.dy -= 0.2
-            app.player.dx -= 0.2
-        if app.player.health <= 0:
-            app.paused = True
-            app.deathScreen = True
-        self.damageCooldown = 5
-    
-    def takeDamage(self, app, damage):
-        self.health -= damage
-        if self.health <= 0:
-            self.die(app)
-        if app.player.x < self.x:
-            self.dx += 0.6
-        else:
-            self.dx -= 0.6
-        self.dy -= 0.2
-        self.isHurt = 0
-        self.spriteIndex = 0
-    
-    def die(self, app):
-        chunk = app.game.getChunk(app, app.game.getChunkIndex(self.x))
-        chunk.mobs.remove(self)
-        drop = Item("carrot", self.x, self.y, chunk, random.randint(1, 3), dy=-0.5, inventoryClass=Carrot)
-        chunk.items.append(drop)

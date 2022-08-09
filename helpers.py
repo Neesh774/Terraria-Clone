@@ -2,19 +2,25 @@ import copy
 import decimal
 from re import A
 from time import time
-from PIL import ImageTk
+from PIL import ImageTk, Image
 import math
 from enum import Enum
 import random
 from settings import *
 from assets.colors import colors
+import numpy as np
+
+
 class Blocks(Enum):
     AIR = -1
     GRASS = 0
     DIRT = 1
     STONE = 2
     BEDROCK = 3
-
+    LOG = 4
+    PLANKS = 5
+    PLATFORM = 6
+    WALL = 7
 class Entity:
     def __init__(self, x, y, dx = 0, dy = 0):
         self.x = x
@@ -22,6 +28,8 @@ class Entity:
         self.dx = dx
         self.dy = dy
         self.gravityVal = 0.1
+        self.suffocationDamage = False
+        self.suffocationDelay = -1
 
     def updateWrapper(self, app, *args):
         self.y -= self.dy
@@ -48,6 +56,7 @@ class Entity:
         blockRight = getBlockFromCoords(app, math.ceil(self.x), math.ceil(self.y))
         blockTopLeft = getBlockFromCoords(app, math.floor(self.x), math.floor(self.y + 1))
         blockTopRight = getBlockFromCoords(app, math.ceil(self.x), math.floor(self.y + 1))
+        blockBelow = getBlockFromCoords(app, roundHalfUp(self.x), math.floor(self.y) - 1)
         if blockTopLeft and blockTopLeft.solid:
             blockTop = blockTopLeft
         elif blockTopRight and blockTopRight.solid:
@@ -58,6 +67,7 @@ class Entity:
         
         # Right Collision
         if 0 < self.dx:
+            
             topBlock = blockTopLeft and blockTopLeft.solid
             diagBlock = getBlockFromCoords(app, math.ceil(self.x), math.ceil(self.y) + 1)
             freeDiagBlock = not diagBlock or not diagBlock.solid
@@ -70,12 +80,14 @@ class Entity:
                 not sneak):
                 self.x = blockRight.x
                 self.y = blockRight.y + 1
+                self.dx = 0.01
             elif blockRight and blockRight.solid:
                 self.dx = 0
                 self.x = blockRight.x - 0.9
 
         # Left Collision
         elif self.dx < 0:
+            
             topBlock = blockTop and blockTop.solid
             diagBlock = getBlockFromCoords(app, math.floor(self.x) - 1, math.ceil(self.y) + 1)
             freeDiagBlock = not diagBlock or not diagBlock.solid
@@ -84,12 +96,13 @@ class Entity:
                 and freeDiagBlock and onGround and not sneak):
                 self.x = blockLeft.x + 1
                 self.y = blockLeft.y + 1
+                self.dx = -0.01
             elif blockLeft and blockLeft.solid:
                 self.dx = 0
                 self.x = blockLeft.x + 1.1
 
         # Gravity Collision
-        if isOnGround(app, self.x, self.y) and self.dy >= 0:
+        if isOnGround(app, self.x, self.y) and self.dy > 0:
             onGround = True
             self.dy = 0
             groundLeft = getGround(app, math.floor(self.x), self.y)
@@ -97,7 +110,7 @@ class Entity:
             self.y = max(groundLeft, groundRight)
         
         # Top Collision
-        if self.dy != 0 and blockTop and blockTop.solid:
+        if self.dy != 0 and blockTop and blockTop.solid == 1:
             if blockTopLeft:
                 leftOverlap = hasOverlap(
                     (blockTopLeft.x, blockTopLeft.y,
@@ -114,11 +127,10 @@ class Entity:
                 )
             else:
                 rightOverlap = False
-
-            if leftOverlap and blockTopLeft.solid:
+            if leftOverlap and blockTopLeft.solid == 1:
                 self.dy = 0
                 self.y = blockTopLeft.y - 1
-            if rightOverlap and blockTopRight.solid:
+            if rightOverlap and blockTopRight.solid == 1:
                 self.dy = 0
                 self.y = blockTopRight.y - 1
                 
@@ -162,12 +174,15 @@ def getPixX(app, x):
 def getPixY(app, y):
     return (app.height * 0.6) + ((app.player.y - y) * UNIT_WH)
 
-def getGround(app, x, y):
+def getGround(app, x, y, ignoreHalfBlocks = False):
     for chunk in app.game.loaded:
         if chunk.inChunk(x):
             for r in range(math.ceil(y), -1, -1):
                 if (x, r) in chunk.blocks and chunk.blocks[(x, r)].solid:
-                    return chunk.blocks[(x, r)].y + 1
+                    if (not ignoreHalfBlocks) and chunk.blocks[(x, r)].solid == 0.5:
+                        return getGround(app, x, y, True)
+                    else:
+                        return chunk.blocks[(x, r)].y + 1
     return -1
 
 def generateChunks(app):
@@ -175,36 +190,6 @@ def generateChunks(app):
         app.game.generateChunk(app, False)
     while max(app.game.loaded).index > max(app.game.chunks.values()).index - 2:
         app.game.generateChunk(app, True)
-
-def drawBlock(app, block, canvas):
-    x, y = getPixFromCoords(app, block.x, block.y)
-
-    if app._clearCanvas:
-
-        if app.func.goodGraphics:
-            image = getImage(app, block.type.name)
-            if image != None:
-                canvas.create_image(x, y, anchor="nw", image=image)
-        else:
-            if block.type.name != "AIR":
-                canvas.create_rectangle(x, y, x + UNIT_WH, y + UNIT_WH,
-                                    fill=block.color, width=0)
-            elif belowSurface(app, block):
-                canvas.create_rectangle(x, y, x + UNIT_WH, y + UNIT_WH,
-                                    fill="grey13", width=0)
-
-        if app.func.hovering and app.func.hovering == block:
-            if not app.func.canInteract:
-                outline = "#929292"
-            else:
-                outline = "#F4AC38"
-            if app.func.holding:
-                heldTime = time() - app.func.holding
-                width = heldTime / 0.1 * 5
-            else:
-                width = 1
-            app.func.hoveringRect = canvas.create_rectangle(x, y, x + UNIT_WH, y + UNIT_WH,
-                                    outline=outline, width=width)
 
 def moveBlock(app, block, canvas):
     x, y = getPixFromCoords(app, block.x, block.y)
@@ -260,13 +245,19 @@ def generateTerrain(y1, y2, displace=1, length=0):
         generateTerrain(midpoint, y2, int(displace * 0.5), length))
     
 def belowSurface(app, block):
-    chunk = app.game.getChunk(app, block.chunkInd)
-    for i in range(BUILD_HEIGHT, block.y, -1):
-        if (block.x, i) in chunk.blocks and chunk.blocks[(block.x, i)].solid:
-            return True
     if block.y <= GROUND_LEVEL - GRASS_LEVEL - TERRAIN_VARIATION:
         return True
     return False
+
+def getSurface(app, x):
+    for chunk in app.game.loaded:
+        if chunk.inChunk(x):
+            for r in range(GROUND_LEVEL - GRASS_LEVEL - TERRAIN_VARIATION,
+                            GROUND_LEVEL - GRASS_LEVEL + TERRAIN_VARIATION):
+                if (x, r) in chunk.blocks and chunk.blocks[(x, r)].type == Blocks.AIR:
+                    if (x, r + 1) not in chunk.blocks:
+                        return r
+    return -1
 
 def getBackgroundColor(time):
     lastR, lastG, lastB = colors[math.floor(time)]
@@ -292,4 +283,106 @@ def isOverEnemy(app, x, y):
         if withinBounds(mob.x - width / 2 - margin, mob.y - height / 2 - margin,
                         mob.x + width / 2 + margin, mob.y + height / 2, x, y):
             return mob
+    return False
+
+def canBeMade(app, recipe):
+    items = {}
+    for inv in app.player.inventory:
+        if not inv: continue
+        if inv.name in items.keys():
+            items[inv.name] += inv.count
+        else:
+            items[inv.name] = inv.count
+    for name, count in recipe["ingredients"].items():
+        if name not in items or items[name] < count:
+            return False
+    return True
+
+def makeRecipe(app, recipe):
+    for item, count in recipe["ingredients"].items():
+        app.player.removeItem(app, item, count)
+    app.player.pickUp(app, copy.deepcopy(recipe["output"]))
+
+def numCanCraft(app, recipe):
+    if not canBeMade(app, recipe): return
+    items = {}
+    for inv in app.player.inventory:
+        if not inv: continue
+        if inv.name in items.keys():
+            items[inv.name] += inv.count
+        else:
+            items[inv.name] = inv.count
+    
+    # get maximum number of recipe that can be made
+    maxCount = 0
+    for name, count in recipe["ingredients"].items():
+        if name not in items:
+            return 0
+        maxCount += items[name] // count
+    return maxCount
+
+def getColors(image):
+    im  = np.array(image)
+
+    colors = []
+
+    for x in range(im.shape[1]):
+        row = []
+        for y in range(im.shape[0]):
+            row.append(tuple(im[y, x]))
+        colors.append(row)
+    
+    return colors
+
+def nearbySolid(app, x, y):
+    solid = []
+    block = getBlockFromCoords(app, x - 1, y)
+    if block and block.solid == 1:
+        solid.append(block)
+    block = getBlockFromCoords(app, x + 1, y)
+    if block and block.solid == 1:
+        solid.append(block)
+    block = getBlockFromCoords(app, x, y - 1)
+    if block and block.solid == 1:
+        solid.append(block)
+    block = getBlockFromCoords(app, x, y + 1)
+    if block and block.solid == 1:
+        solid.append(block)
+    
+    return solid
+
+def nearbyAir(app, x, y):
+    air = []
+    block = getBlockFromCoords(app, x - 1, y)
+    if block and block.type == Blocks.AIR:
+        air.append(block)
+    block = getBlockFromCoords(app, x + 1, y)
+    if block and block.type == Blocks.AIR:
+        air.append(block)
+    block = getBlockFromCoords(app, x, y - 1)
+    if block and block.type == Blocks.AIR:
+        air.append(block)
+    block = getBlockFromCoords(app, x, y + 1)
+    if block and block.type == Blocks.AIR:
+        air.append(block)
+    
+    return air
+
+def getPath(app, x1, y1, x2, y2, depth = 0, path = [], maxDepth = 5):
+    if path == []:
+        path = [(x1, y1)]
+    if x1 == x2 and y1 == y2:
+        return path
+    if depth > maxDepth:
+        return False
+    block1 = getBlockFromCoords(app, x1, y1)
+    if not block1: return False
+    block2 = getBlockFromCoords(app, x2, y2)
+    if not block2: return False
+    for air in nearbyAir(app, x1, y1):
+        if (air.x, air.y) in path: continue
+        path.append((air.x, air.y))
+        if getPath(app, air.x, air.y, x2, y2, depth + 1, path, maxDepth):
+            return path
+        path.pop()
     return False

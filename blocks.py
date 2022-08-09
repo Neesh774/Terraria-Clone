@@ -1,7 +1,9 @@
+from re import I
 from helpers import *
+import numpy as np
 
 class Block:
-    def __init__(self, x, y, block: Blocks, chunkInd, solid = True, breakable = True, color="black", mineLevel = 0):
+    def __init__(self, app, x, y, block: Blocks, chunkInd, solid = 1, breakable = True, color="black", mineLevel = 0, **kwargs):
         self.x = x
         self.y = y
         self.type = block
@@ -11,6 +13,8 @@ class Block:
         self.image = None
         self.color = color
         self.mineLevel = mineLevel
+        for key, value in kwargs.items():
+            setattr(self, key, value)
         
     def load(self, app, canvas):
         image = getImage(app, self.type.name)
@@ -18,6 +22,33 @@ class Block:
             return
         self.image = canvas.create_image(getPixX(app, self.x), getPixY(app, self.y),
                             anchor="nw", image=image)
+
+    def drawWrapper(self, app, canvas):
+        x, y = getPixFromCoords(app, self.x, self.y)
+        if app.func.goodGraphics:
+            image = getImage(app, self.type.name)
+            if image != None:
+                canvas.create_image(x, y, anchor="nw", image=image)
+        else:
+            self.draw(app, canvas, x, y)
+
+        if app.func.hovering and app.func.hovering == self:
+            if not app.func.canInteract:
+                outline = "#929292"
+            else:
+                outline = "#F4AC38"
+            if app.func.holding:
+                heldTime = time() - app.func.holding
+                width = heldTime / 0.2 * 5
+            else:
+                width = 1
+            app.func.hoveringRect = canvas.create_rectangle(x, y, x + UNIT_WH, y + UNIT_WH,
+                                    outline=outline, width=width)
+    
+    def draw(self, app, canvas, x, y):
+        canvas.create_rectangle(x, y, x + UNIT_WH, y + UNIT_WH,
+                            fill=self.color, width=0)
+
     def __str__(self):
         return f"""({self.x}, {self.y}) {self.type.name} C: {self.chunkInd}\n
                     solid={self.solid}
@@ -29,23 +60,51 @@ class Block:
         sameType = self.type == other.type
         return sameCoords and sameType
 class Air(Block):
-    def __init__(self, x, y, chunkInd):
-        super().__init__(x, y, Blocks.AIR, chunkInd, solid=False, breakable=False,
+    def __init__(self, app, x, y, chunkInd):
+        super().__init__(app, x, y, Blocks.AIR, chunkInd, solid=0, breakable=False,
                          color="grey2")
-        
+    def draw(self, app, canvas, x, y):
+        if belowSurface(app, self):
+            canvas.create_rectangle(x, y, x + UNIT_WH, y + UNIT_WH,
+                                fill="grey13", width=0)
 class Grass(Block):
-    def __init__(self, x, y, chunkInd):
-        super().__init__(x, y, Blocks.GRASS, chunkInd, color="chartreuse4")
+    def __init__(self, app, x, y, chunkInd):
+        super().__init__(app, x, y, Blocks.GRASS, chunkInd, color="chartreuse4")
 
 class Dirt(Block):
-    def __init__(self, x, y, chunkInd):
-        super().__init__(x, y, Blocks.DIRT, chunkInd, color="tan4")
+    def __init__(self, app, x, y, chunkInd):
+        super().__init__(app, x, y, Blocks.DIRT, chunkInd, color="tan4")
         
 class Stone(Block):
-    def __init__(self, x, y, chunkInd):
-        super().__init__(x, y, Blocks.STONE, chunkInd, color="seashell4")
+    def __init__(self, app, x, y, chunkInd):
+        super().__init__(app, x, y, Blocks.STONE, chunkInd, color="seashell4")
 
 class Bedrock(Block):
-    def __init__(self, x, y, chunkInd):
-        super().__init__(x, y, Blocks.BEDROCK, chunkInd, solid=True, breakable=False,
+    def __init__(self, app, x, y, chunkInd):
+        super().__init__(app, x, y, Blocks.BEDROCK, chunkInd, solid=1, breakable=False,
                          color="dark slate gray")
+    
+class Log(Block):
+    def __init__(self, app, x, y, chunkInd, natural=False):
+        super().__init__(app, x, y, Blocks.LOG, chunkInd,
+                         color="LightSalmon4", natural = natural)
+
+class Planks(Block):
+    def __init__(self, app, x, y, chunkInd):
+        super().__init__(app, x, y, Blocks.PLANKS, chunkInd, color="LightSalmon3")
+
+class Platform(Block):
+    def __init__(self, app, x, y, chunkInd):
+        super().__init__(app, x, y, Blocks.PLATFORM, chunkInd, solid = 0.5,  color="LightSalmon3")
+    
+    def draw(self, app, canvas, x, y):
+        canvas.create_rectangle(x, y, x + UNIT_WH, y + (UNIT_WH / 2),
+                                fill=self.color, width=0)
+        if belowSurface(app, self):
+            canvas.create_rectangle(x, y + (UNIT_WH / 2), x + UNIT_WH, y + UNIT_WH,
+                                fill="grey13", width=0)
+
+class Wall(Block):
+    def __init__(self, app, x, y, chunkInd):
+        super().__init__(app, x, y, Blocks.WALL, chunkInd, solid=0,
+                         color="#A6670E")

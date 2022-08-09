@@ -1,16 +1,17 @@
 import cProfile
+from pprint import pprint
 from time import time
 import tkinter
-
 from PIL import Image,ImageTk
 from cmu_112_graphics import *
 from enum import Enum
 import os
 from assets.colors import colors
-from settings import *
 
+from settings import *
 from classes import *
 from helpers import *
+from recipes import *
 
 ###############################################################################
 # MVC
@@ -26,8 +27,8 @@ def appStarted(app):
         if not f.endswith(".png"):
             continue
         app.images[f[:-4]] = Image.open("assets/blocks/" + f).resize((UNIT_WH, UNIT_WH))
-    app.player = Player()
     app.game = Game(app)
+    app.player = Player(app)
     # app.game.loadChunks(app)
     app.func = Functionality(app)
     app.lastTime = time()
@@ -99,7 +100,7 @@ def drawChunk(app, canvas: tkinter.Canvas, chunk: Chunk):
                 continue
             block = chunk.blocks[(r, b)]
             
-            drawBlock(app, block, canvas)
+            block.drawWrapper(app, canvas)
             if r == chunk.x and app.func.debug:
                 x, _ = getPixFromCoords(app, block.x, block.y)
                 canvas.create_rectangle(x, 0, x + (CHUNK_SIZE * UNIT_WH), app.height,
@@ -211,6 +212,45 @@ def drawDeath(app, canvas):
     canvas.create_text(app.width / 2, app.height * 0.6, width=app.width,
                         text="Press any key to continue", font=("Arial", "22"), fill="#9A9A9A")
 
+def drawCrafting(app, canvas):
+    slot_wh = 24
+    totalWidth = app.width * 0.8
+    pageLength = int(totalWidth / (slot_wh + 12))
+    startInd = app.func.craftingPage * pageLength
+    numCrafts = len(app.player.canCraft)
+    canvas.create_rectangle(app.width * 0.09, app.height * 0.75,
+                            app.width * 0.91, app.height * 0.90,
+                            fill="Slategray3", outline="Slategray4", width=4)
+    canvas.create_text(app.width * 0.12, app.height * 0.78,
+                       text=f'Crafting({numCrafts})', font=("Arial", "18", "bold"),
+                       fill="Slategray4", width=totalWidth, anchor="w")
+    if len(app.player.canCraft) > app.func.craftingSelected and app.player.canCraft[app.func.craftingSelected]:
+        selected = app.player.canCraft[app.func.craftingSelected]
+        canvas.create_text(app.width * 0.89, app.height * 0.78,
+                           text=f'{selected["output"].name.capitalize()}(x{selected["output"].count})', font=("Arial", "15", "bold"),
+                           width=totalWidth, fill="Slategray4", anchor="e")
+    for i in range(pageLength):
+        if (startInd + i) >= numCrafts:
+            break
+        craft = app.player.canCraft[startInd + i]["output"]
+        if app.func.craftingSelected == startInd + i:
+            borderWidth = 2
+        else:
+            borderWidth = 0
+        canvas.create_rectangle(app.width * 0.1 + 8 + (i * (slot_wh + 12)) - 4,
+                                app.height * 0.85 - (slot_wh / 2) - 4,
+                                app.width * 0.1 + 8 + (i * (slot_wh + 12)) + slot_wh + 4,
+                                app.height * 0.85 + (slot_wh / 2) + 4,
+                                fill="#965816", outline="#CCCCCC", width=borderWidth)
+        canvas.create_image(app.width * 0.1 + 8 + (i * (slot_wh + 12)) + (slot_wh / 2) + 2,
+                            app.height * 0.85 + 2, 
+                            image=getImage(app, craft.name, resize=(slot_wh - 2, slot_wh - 2)))
+        canCraftNum = numCanCraft(app, app.player.canCraft[startInd + i])
+        canvas.create_text(app.width * 0.1 + 8 + (i * (slot_wh + 12)),
+                            app.height * 0.85 - (slot_wh / 2) + 5,
+                            text=canCraftNum * craft.count,
+                            font=app.smallFont, fill="#38332F", anchor="w")
+
 def redrawAll(app, canvas:tkinter.Canvas):
     app.entities = []
     if app.deathScreen:
@@ -221,11 +261,16 @@ def redrawAll(app, canvas:tkinter.Canvas):
         drawPlayer(app, canvas)
         if app.func.debug:
             drawDebug(app, canvas)
+        for entity in app.entities:
+            canvas.tag_raise(entity)
         drawHotbar(app, canvas)
         if app.func.keybinds:
             drawSettings(app, canvas)
-    for entity in app.entities:
-        canvas.tag_raise(entity)
+        if app.func.isCrafting:
+            drawCrafting(app, canvas)
+    canvas.create_image(app.func.mouseX, app.func.mouseY, image=getImage(app, "cursor"),
+                        anchor="nw")
+
 
 def timerFired(app):
     if not app.paused:
@@ -249,7 +294,7 @@ def timerFired(app):
         """
         app.func.handleKeys(app)
         app.func.updateHovering(app)
-        if app.func.holding and time() - app.func.holding > 0.1:
+        if app.func.holding and time() - app.func.holding > 0.2:
             app.func.handleClick(app)
             app.func.holding = None
 

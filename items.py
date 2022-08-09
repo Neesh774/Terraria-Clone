@@ -9,6 +9,13 @@ class InventoryItem():
     def toItem(self, chunk, x, y, canPickUp=True, dx=0, dy=0, count=1):
         return Item(self.name, x, y, chunk, count=(count if count else self.count), canPlace=self.canPlace, canPickUp=canPickUp,
                     dx=dx, dy=dy)
+    
+    def addToCount(self, count):
+        self.count += count
+        if self.count < 0:
+            self.count = 0
+        if self.count > STACK_MAX:
+            self.count = STACK_MAX
 
     def __eq__(self, other):
         return self.name == other.name
@@ -61,8 +68,9 @@ class Item(Entity):
         image = getImage(app, self.name, resize=(item_wh, item_wh))
         if image == None:
             return
-        canvas.create_image(getPixX(app, self.x), getPixY(app, self.y),
+        im = canvas.create_image(getPixX(app, self.x), getPixY(app, self.y),
                             anchor="nw", image=image)
+        app.entities.append(im)
     
     def toInventory(self):
         return self.inventoryClass(name=self.name, count=self.count,
