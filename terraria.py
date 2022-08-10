@@ -1,12 +1,6 @@
-import cProfile
-from pprint import pprint
 from time import time
-import tkinter
-from PIL import Image,ImageTk
-from cmu_112_graphics import *
 from enum import Enum
 import os
-from assets.colors import colors
 import pygame
 from pygame.locals import *
 from pygame.key import *
@@ -28,32 +22,30 @@ def appStarted(app):
     for f in os.listdir("assets"):
         if not f.endswith(".png"):
             continue
-        app.images[f[:-4]] = pygame.image.load(os.path.join(ASSETS_DIR, f))
-    for f in os.listdir("assets/blocks"):
-        if not f.endswith(".png"):
-            continue
-        app.images[f[:-4]] = pygame.image.load(os.path.join("assets/blocks", f))
-    app.game = Game(app)
+        image = pygame.image.load(os.path.join(ASSETS_DIR, f))
+        image.set_alpha(255)
+        app.images[f[:-4]] = image
+    
+    Game(app)
     app.player = Player(app)
+    app.playerSpriteGroup = pygame.sprite.GroupSingle(app.player)
     app.func = Functionality(app)
     app.lastTime = time()
     checkBackground(app)
     app.paused = False
     app.deathScreen = False
     
+    app.largeFont = pygame.font.Font("assets/terraria.ttf", 20)
     app.font = pygame.font.Font("assets/terraria.ttf", 16)
-    app.debugFont = pygame.font.Font("assets/terraria.ttf", 12)
+    app.smallFont = pygame.font.Font("assets/terraria.ttf", 14)
 
 def keyPressed(app, event):
-    if not app.paused:
-        app.func.keys.append(event.key)
     if app.deathScreen:
         app.paused = False
         app.deathScreen = False
         app.player.die(app)
-    if event.key == ".":
-        app._clearscreen = not app._clearscreen
-        print("Clear screen " + ("On" if app._clearscreen else "Off"))
+    else:
+        app.func.handleKey(app, event)
 
 def sizeChanged(app):
     if app.width > 720:
@@ -103,17 +95,14 @@ def drawChunk(app, screen: pygame.Surface, chunk: Chunk):
                 continue
             block = chunk.blocks[(r, b)]
             
-            block.drawWrapper(app, screen)
             if r == chunk.x and app.func.debug:
                 x, _ = getPixFromCoords(app, block.x, block.y)
                 pygame.draw.rect(screen, ("red" if chunk.x == app.game.getChunk(app, app.player.chunk).x else "black"),
-                                 (x, 0, x + (CHUNK_SIZE * UNIT_WH), app.height))
+                                 (x, 0, (CHUNK_SIZE * UNIT_WH), app.height), 1)
     
-    for item in chunk.items:
-        item.draw(app, screen)
-    
-    for mob in chunk.mobs:
-        mob.draw(app, screen)
+    chunk.items.draw(screen)
+
+    chunk.mobs.draw(screen)
 
 def drawGame(app, screen: pygame.Surface):
     pygame.draw.rect(screen, getBackgroundColor(app.game.time), (0, 0, app.width, app.height), 0)
@@ -121,110 +110,117 @@ def drawGame(app, screen: pygame.Surface):
     pygame.draw.rect(screen, "#2D404F", (0, app.height * 0.5, app.width, app.height), 0)
 
     for bgX in app.game.bgX:
-        screen.blit(app.background, (bgX, app.height * 0.5))
+        screen.blit(app.background, (bgX, app.height * 0.2))
     
     pygame.draw.rect(screen, "#050505", (0, getPixY(app, GROUND_LEVEL - GRASS_LEVEL - TERRAIN_VARIATION),
-                            app.width, app.height), 0)
+                            app.width, app.height * 2), 0)
     
     for chunk in app.game.loaded:
         drawChunk(app, screen, chunk)
+    
+    app.game.blocks.draw(screen)
 
 def drawPlayer(app, screen: pygame.Surface):
     x = app.width / 2
-    y = app.height * 0.6 + UNIT_WH
-    screen.blit(app.player.getSprite(), (x, y))
+    y = app.height * 0.6
+    screen.blit(app.player.getSprite(), (x + 0.2, y + 4))
 
 def drawDebug(app, screen: pygame.Surface):
-    time = app.font.render(f"G: {app.game.time}", 1, "#9A9A9A")
-    pos = time.get_rect()
-    pos.center = (5, 10)
-    screen.blit(time, pos)
+    gameTime = app.font.render(f"G: {app.game.time}", 1, "#9A9A9A")
+    pos = gameTime.get_rect()
+    pos.left, pos.centery = (5, 15)
+    screen.blit(gameTime, pos)
 
-    tps = app.font.render(f'TPS: {round(1 / (time() - app.lastTime), 3)}', "#9A9A9A")
+    tps = app.font.render(f'TPS: {round(1 / (time() - app.lastTime), 3)}', 1, "#9A9A9A")
     pos = tps.get_rect()
-    pos.center = (5, 30)
+    pos.left, pos.centery = (5, 35)
     screen.blit(tps, pos)
     
-    player = app.font.render(f"Player: {app.player.x}, {app.player.y}", "#9A9A9A")
+    player = app.font.render(f"Player: {app.player.x}, {app.player.y}", 1, "#9A9A9A")
     pos = player.get_rect()
-    pos.center = (5, 50)
+    pos.left, pos.centery = (5, 55)
     screen.blit(player, pos)
 
-    mouse = app.font.render(f'M: ({app.func.mouseX}, {app.func.mouseY})', "#9A9A9A")
+    mouse = app.font.render(f'M: ({app.func.mouseX}, {app.func.mouseY})', 1, "#9A9A9A")
     pos = mouse.get_rect()
-    pos.center = (5, 70)
+    pos.left, pos.centery = (5, 75)
     screen.blit(mouse, pos)
 
     if app.func.hovering:
         block = app.func.hovering
         if block:
-            blockText = app.font.render(f'B: ({block.x}, {block.y}) {block.type.name} {block.chunkInd}', "#9A9A9A")
+            blockText = app.font.render(f'B: ({block.x}, {block.y}) {block.type.name} {block.chunkInd}', 1, "#9A9A9A")
             pos = blockText.get_rect()
-            pos.center = (5, 90)
+            pos.left, pos.centery = (5, 95)
             screen.blit(blockText, pos)
 
 def drawHotbar(app, screen: pygame.Surface):
     width = 9 * 28 + 40
     itemWidth = int((width - 40) / 9)
-    screen.create_rectangle(app.width - width - 8, 12,
-                            app.width, 20 + itemWidth,
-                            fill="slate gray", width=0)
+    pygame.draw.rect(screen, "#737F8F", (app.width - width - 8, 12,
+                            width, itemWidth + 8), 0)
     for i, item in enumerate(app.player.inventory):
         x = 8 + (i * (itemWidth + 4))
         selected = app.func.selectedInventory == i
-        if selected:
-            borderWidth = 2
-        else:
-            borderWidth = 0
         left = app.width - width - 12 + x
-        screen.create_rectangle(left, 16,
-                                left + itemWidth, 16 + itemWidth, width=borderWidth,
-                                fill="#965816", outline="#C79355")
+        pygame.draw.rect(screen, "#965816", (left, 16,
+                                itemWidth, itemWidth), 0)
+        if selected:
+            pygame.draw.rect(screen, "#B4B4B4", (left, 16,
+                                itemWidth, itemWidth), 2)
         if item:
-            screen.create_image(left + 4 + (itemWidth / 2), 16 + (itemWidth / 2),
-                                image=getImage(app, item.name))
-        screen.create_text(left + 4, 10, anchor="nw", text=item.count if item else "",
-                           font=app.smallFont, fill="#38332F")
+            image = pygame.transform.scale(getImage(app, item.name), (itemWidth - 8, itemWidth - 8))
+            screen.blit(image, (left + 5, 20))
+            count = app.smallFont.render(f"{item.count}", 1, "#38332F")
+            pos = count.get_rect()
+            pos.left, pos.centery = (left + 2, itemWidth - 4)
+            screen.blit(count, pos)
+
     for h in range(0, 10):
-        x = app.width - h * 18 - 20
-        screen.create_image(x, 64,
-                            image=getImage(app, "emptyHeart", (16, 16)))
+        x = app.width - (h + 1) * (18 + 4)
+        emptyHeart = pygame.transform.scale(getImage(app, "emptyHeart"), (16, 16))
+        screen.blit(emptyHeart, (x, 64))
         if h == app.player.health - 0.5:
-            screen.create_image(x, 64,
-                                image=getImage(app, "halfHeart", (16, 16)))
+            halfHeart = pygame.transform.scale(getImage(app, "halfHeart"), (16, 16))
+            screen.blit(halfHeart, (x, 64))
         elif h < app.player.health:
-            screen.create_image(x, 64,
-                                image=getImage(app, "heart", (16, 16)))
+            heart = pygame.transform.scale(getImage(app, "heart"), (16, 16))
+            screen.blit(heart, (x, 64))
     
 def drawSettings(app, screen):
     left = app.width * 0.1
     top = app.height * 0.1
     width = app.width * 0.8
     height = app.height * 0.8
-    screen.create_rectangle(left, top,
-                            left + width, top + height,
-                            fill="#C79355", outline="#9D7039", width=3)
+    pygame.draw.rect(screen, "#C79355", (left, top, width, height), 0)
     for i, (action, keybind) in enumerate(KEYBINDS.items()):
         cell_height = (height * 0.1) + 2
         row = i * cell_height
         leftCentX = app.width * 0.23
         leftCentY = row + top + (cell_height - 8) / 2
-        screen.create_text(leftCentX, leftCentY,
-                           text=action, font=("Arial", "16"), fill="#38332F",
-                           anchor="nw")
-        screen.create_rectangle(app.width * 0.52, row + top + 20,
-                                app.width * 0.78, row + top + cell_height,
-                                fill="#9D7039", outline="#9D7039", width=3)
-        screen.create_text(app.width * 0.65, row + top + 2 + (cell_height / 2),
-                           anchor="n",
-                           text=keybind, font=("Arial", "12"))
+
+        actionText = app.font.render(action, 1, "#38332F")
+        screen.blit(actionText, (leftCentX, leftCentY))
+
+        box = pygame.draw.rect(screen, "#9D7039", (app.width * 0.52, row + top + 20, width * 0.26, cell_height - 20), 0)
+        keybindText = app.font.render(keybind, 1, "#38332F")
+        pos = keybindText.get_rect()
+        pos.centerx, pos.centery = box.center
+        screen.blit(keybindText, pos)
+
 
 def drawDeath(app, screen):
-    screen.create_image(app.width / 2, app.height / 2, image=getImage(app, "options_background", resize=(app.width, app.height)))
-    screen.create_text(app.width / 2, app.height * 0.4, width=app.width,
-                        text="You Died!", font=("Arial", "32"), fill="#9A9A9A")
-    screen.create_text(app.width / 2, app.height * 0.6, width=app.width,
-                        text="Press any key to continue", font=("Arial", "22"), fill="#9A9A9A")
+    optionsBg = pygame.transform.scale(getImage(app, "options_background"), (app.width, app.height))
+    screen.blit(optionsBg, (0, 0))
+    deathText = app.font.render("You Died!", 1, "#9A9A9A")
+    pos = deathText.get_rect()
+    pos.center = (app.width / 2, app.height / 2)
+    screen.blit(deathText, pos)
+
+    restartText = app.font.render("Press any key to continue", 1, "#9A9A9A")
+    pos = restartText.get_rect()
+    pos.center = (app.width / 2, app.height * 0.6)
+    screen.blit(restartText, pos)
 
 def drawCrafting(app, screen):
     slot_wh = 24
@@ -232,59 +228,56 @@ def drawCrafting(app, screen):
     pageLength = int(totalWidth / (slot_wh + 12))
     startInd = app.func.craftingPage * pageLength
     numCrafts = len(app.player.canCraft)
-    screen.create_rectangle(app.width * 0.09, app.height * 0.75,
-                            app.width * 0.91, app.height * 0.90,
-                            fill="Slategray3", outline="Slategray4", width=4)
-    screen.create_text(app.width * 0.12, app.height * 0.78,
-                       text=f'Crafting({numCrafts})', font=("Arial", "18", "bold"),
-                       fill="Slategray4", width=totalWidth, anchor="w")
+    pygame.draw.rect(screen, "#767C92", (app.width * 0.09, app.height * 0.75,
+                            app.width * 0.82, app.height * 0.15), 0)
+    craftHeader = app.largeFont.render(f'Crafting({numCrafts})', 1, "#545B64")
+    pos = craftHeader.get_rect()
+    pos.left, pos.centery = app.width * 0.10, app.height * 0.78
+    screen.blit(craftHeader, pos)
     if len(app.player.canCraft) > app.func.craftingSelected and app.player.canCraft[app.func.craftingSelected]:
         selected = app.player.canCraft[app.func.craftingSelected]
-        screen.create_text(app.width * 0.89, app.height * 0.78,
-                           text=f'{selected["output"].name.capitalize()}(x{selected["output"].count})', font=("Arial", "15", "bold"),
-                           width=totalWidth, fill="Slategray4", anchor="e")
+        name = app.font.render(f'{selected["output"].name.capitalize()}(x{selected["output"].count})', 1, '#545B64')
+        pos = name.get_rect()
+        pos.right, pos.centery = app.width * 0.89, app.height * 0.78
+        screen.blit(name, pos)
     for i in range(pageLength):
         if (startInd + i) >= numCrafts:
             break
         craft = app.player.canCraft[startInd + i]["output"]
         if not craft:
             continue
-        if app.func.craftingSelected == startInd + i:
-            borderWidth = 2
-        else:
-            borderWidth = 0
-        screen.create_rectangle(app.width * 0.1 + 8 + (i * (slot_wh + 12)) - 4,
+        pygame.draw.rect(screen, "#965816", (app.width * 0.1 + 8 + (i * (slot_wh + 12)) - 4,
                                 app.height * 0.85 - (slot_wh / 2) - 4,
-                                app.width * 0.1 + 8 + (i * (slot_wh + 12)) + slot_wh + 4,
-                                app.height * 0.85 + (slot_wh / 2) + 4,
-                                fill="#965816", outline="#CCCCCC", width=borderWidth)
-        screen.create_image(app.width * 0.1 + 8 + (i * (slot_wh + 12)) + (slot_wh / 2) + 2,
-                            app.height * 0.85 + 2, 
-                            image=getImage(app, craft.name, resize=(slot_wh - 2, slot_wh - 2)))
+                                slot_wh + 8, slot_wh + 8), 0)
+        if app.func.craftingSelected == startInd + i:
+            pygame.draw.rect(screen, "#B4B4B4", (app.width * 0.1 + 8 + (i * (slot_wh + 12)) - 4,
+                                app.height * 0.85 - (slot_wh / 2) - 4,
+                                slot_wh + 8, slot_wh + 8), 2)
+        image = pygame.transform.scale(getImage(app, craft.name), (slot_wh - 2, slot_wh - 2))
+        screen.blit(image, (app.width * 0.1 + 8 + (i * (slot_wh + 12)) + 2,
+                            app.height * 0.85 - (slot_wh / 2) + 2))
         canCraftNum = numCanCraft(app, app.player.canCraft[startInd + i])
         if not canCraftNum:
             continue
-        screen.create_text(app.width * 0.1 + 8 + (i * (slot_wh + 12)),
-                            app.height * 0.85 - (slot_wh / 2) + 5,
-                            text=canCraftNum * craft.count,
-                            font=app.smallFont, fill="#38332F", anchor="w")
+        count = app.smallFont.render(f'{canCraftNum * craft.count}', 1, '#38332F')
+        pos = count.get_rect()
+        pos.left, pos.centery = (app.width * 0.1 + 8 + (i * (slot_wh + 12)),
+                            app.height * 0.85 - (slot_wh / 2) + 5)
+        screen.blit(count, pos)
 
 def redrawAll(app, screen:pygame.Surface):
-    app.entities = []
     if app.deathScreen:
         drawDeath(app, screen)
     else:
         drawGame(app, screen)
-        drawPlayer(app, screen)
         if app.func.debug:
             drawDebug(app, screen)
-        # for entity in app.entities:
-        #     screen.tag_raise(entity)
-        # drawHotbar(app, screen)
-        # if app.func.keybinds:
-        #     drawSettings(app, screen)
-        # if app.func.isCrafting:
-        #     drawCrafting(app, screen)
+        drawHotbar(app, screen)
+        app.playerSpriteGroup.draw(screen)
+        if app.func.keybinds:
+            drawSettings(app, screen)
+        if app.func.isCrafting:
+            drawCrafting(app, screen)
     # screen.create_image(app.func.mouseX, app.func.mouseY, image=getImage(app, "cursor"),
     #                     anchor="nw")
 
@@ -295,21 +288,23 @@ def timerFired(app):
         """
         PLAYER
         """
-        app.player.updateWrapper(app)
+        app.playerSpriteGroup.update(app)
         """
         GAME
         """
         app.game.time = round((app.game.time + 0.01) % 23, 2)
+        
+        app.game.blocks.update(app)
+        
         for chunk in app.game.loaded:
             chunk.update(app)
 
-        randomChance = random.randint(0, 50)
-        if randomChance == 0:
-            app.game.spawnMob(app)
+        # randomChance = random.randint(0, 50)
+        # if randomChance == 0:
+        #     app.game.spawnMob(app)
         """
         FUNC
         """
-        app.func.handleKeys(app)
         app.func.updateHovering(app)
         if app.func.holding and time() - app.func.holding > 0.2:
             app.func.handleClick(app)
@@ -324,15 +319,20 @@ def main():
     screen = pygame.display.set_mode((500, 500))
     pygame.display.set_caption("Terraria")
     
+    pygame.key.set_repeat(150, 30)
+    
     app = App()
     
-    while True:
+    pygame.time.set_timer(pygame.USEREVENT + 1, 20)
+    
+    while True: # main event loop
         app.game.loadChunks(app)
-        for event in pygame.event.get():
+        
+        for event in pygame.event.get(): # loop through event queue
             if event.type == QUIT:
                 return
             elif event.type == KEYDOWN:
-                app.func.handleKey(app, event.key)
+                keyPressed(app, event.key)
             elif event.type == MOUSEBUTTONDOWN and event.button == 1:
                 mousePressed(app, event.pos)
             elif event.type == MOUSEMOTION:
@@ -341,9 +341,10 @@ def main():
                 mouseReleased(app)
             elif event.type == WINDOWRESIZED:
                 sizeChanged(app)
+            elif event.type == pygame.USEREVENT + 1:
+                timerFired(app)
         redrawAll(app, screen)
         pygame.display.flip()
-
     
 if __name__ == "__main__":
     main()

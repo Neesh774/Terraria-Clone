@@ -1,8 +1,6 @@
 import copy
 import decimal
-from re import A
-from time import time
-from PIL import ImageTk, Image
+
 import math
 from enum import Enum
 import random
@@ -25,35 +23,38 @@ class Blocks(Enum):
     PLANKS = 5
     PLATFORM = 6
     WALL = 7
-class Entity:
+    
+class Entity(pygame.sprite.Sprite):
     def __init__(self, x, y, dx = 0, dy = 0):
+        pygame.sprite.Sprite.__init__(self)
         self.x = x
         self.y = y
         self.dx = dx
         self.dy = dy
-        self.gravityVal = 0.1
+        self.gravityVal = 0.05
         self.suffocationDamage = False
         self.suffocationDelay = -1
 
-    def updateWrapper(self, app, *args):
+    def update(self, app, *args):
         self.y -= self.dy
         self.gravity(app)
         self.checkForCollision(app)
         self.x += self.dx
-        if app.func.goodGraphics:
-            self.dx *= 0.6
-        else:
-            self.dx *= 0.3
+        self.dx *= 0.7
         if abs(self.dx) < 0.005:
             self.dx = 0
-        if hasattr(self, "update"):
-            self.update(app, *args)
-    
+        if hasattr(self, "tick"):
+            self.tick(app, *args)
+
+        self.rect.x = getPixX(app, self.x)
+        if hasattr(self, "width"):
+            self.rect.x -= self.width / 2
+        self.rect.y = getPixY(app, self.y)
+        if hasattr(self, "height"):
+            self.rect.y -= self.height / 2
+
     def gravity(self, app):
-        if app.func.goodGraphics:
-            self.dy += self.gravityVal * 1.5
-        else:
-            self.dy += self.gravityVal
+        self.dy += self.gravityVal
 
     def checkForCollision(self, app):
         blockLeft = getBlockFromCoords(app, math.floor(self.x) - 1, math.ceil(self.y))
@@ -137,7 +138,6 @@ class Entity:
             if rightOverlap and blockTopRight.solid == 1:
                 self.dy = 0
                 self.y = blockTopRight.y - 1
-                
 
 ###############################################################################
 # HELPER FUNCS
@@ -223,15 +223,10 @@ def roundHalfUp(d):  # helper-fn
     # https://docs.python.org/3/library/decimal.html#rounding-modes
     return int(decimal.Decimal(d).to_integral_value(rounding=rounding))
 
-def getImage(app, name, resize = None, crop = None):
+def getImage(app, name):
     if name not in app.images:
         return None
-    img = copy.copy(app.images[name])
-    if resize:
-        img = img.resize(resize)
-    if crop:
-        img = img.crop(crop)
-    return ImageTk.PhotoImage(img)
+    return app.images[name]
 
 def withinBounds(x1, y1, x2, y2, x, y):
     return x1 <= x <= x2 and y1 <= y <= y2

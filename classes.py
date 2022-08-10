@@ -1,8 +1,6 @@
 from curses import KEY_ENTER
 import math
-from pprint import pprint
 import random
-from PIL import Image,ImageTk
 from helpers import *
 from blocks import *
 from items import *
@@ -20,9 +18,9 @@ class Chunk:
         self.blocks = {}
         self.x = x
         self.index = chunkI
-        self.items = []
+        self.items = pygame.sprite.Group()
         self.points = []
-        self.mobs = []
+        self.mobs = pygame.sprite.Group()
         if startY:
             self.endY = GROUND_LEVEL + random.randint(-TERRAIN_VARIATION, TERRAIN_VARIATION)
             self.startY = startY
@@ -77,6 +75,7 @@ class Chunk:
                     randomChance = random.randint(-1, 2)
                     if ((i, j) in self.blocks and dist <= (rad + randomChance)
                         and self.blocks[(i, j)].breakable):
+                        self.blocks[(i, j)].kill()
                         self.blocks[(i, j)] = Air(app, i, j, chunkI)
     
     def getRange(self, app):
@@ -111,17 +110,20 @@ class Chunk:
                     if x <= self.x:
                         leftChunk = app.game.getChunk(app, self.index - 1)
                         if (x, y) in leftChunk.blocks and leftChunk.blocks[(x, y)].type == Blocks.AIR and nearbySolids == 0:
+                            app.game.blocks.remove(leftChunk.blocks[(x, y)])
                             del leftChunk.blocks[(x, y)]
                     elif x >= self.x + CHUNK_SIZE:
                         rightChunk = app.game.getChunk(app, self.index + 1)
                         if (x, y) in rightChunk.blocks and rightChunk.blocks[(x, y)].type == Blocks.AIR and nearbySolids == 0:
+                            app.game.blocks.remove(rightChunk.blocks[(x, y)])
                             del rightChunk.blocks[(x, y)]
                 elif ((x, y) in self.blocks and self.blocks[(x, y)].type == Blocks.AIR) and nearbySolids == 0:
+                    app.game.blocks.remove(self.blocks[(x, y)])
                     del self.blocks[(x, y)]
     
     def update(self, app):
         for item in self.items:
-            item.updateWrapper(app, self)
+            item.update(app, self)
             if item.x < self.x or item.x > self.x + CHUNK_SIZE:
                 try:
                     self.items.remove(item)
@@ -129,19 +131,19 @@ class Chunk:
                         newChunk = app.game.getChunk(app, self.index - 1)
                     else:
                         newChunk = app.game.getChunk(app, self.index + 1)
-                    newChunk.items.append(item)
+                    newChunk.items.add(item)
                 except Exception:
                     pass
         
         for mob in self.mobs:
-            mob.updateWrapper(app)
+            mob.update(app)
             if mob.x < self.x or mob.x > self.x + CHUNK_SIZE:
                 self.mobs.remove(mob)
                 if mob.x < self.x:
                     newChunk = app.game.getChunk(app, self.index - 1)
                 else:
                     newChunk = app.game.getChunk(app, self.index + 1)
-                newChunk.mobs.append(mob)
+                newChunk.mobs.add(mob)
 
     def __eq__(self, other):
         return self.index == other.index
@@ -152,7 +154,9 @@ class Chunk:
 
 class Game:
     def __init__(self, app):
+        app.game = self
         self.chunks = {}
+        self.blocks = pygame.sprite.Group()
         self.time = 0
         self.bgX = [0, app.background.get_width(), -app.background.get_width()]
         startY = GROUND_LEVEL
@@ -204,7 +208,7 @@ class Game:
     def breakBlock(self, app, block: Block, drop=True):
         chunk = self.getChunk(app, block.chunkInd)
         block = chunk.blocks[(block.x, block.y)]
-        item = Item(block.type.name, block.x, block.y, block.chunkInd, canPlace=True)
+        item = Item(app, block.type.name, block.x, block.y, block.chunkInd, canPlace=True)
         if block.type.name == "LOG" and block.natural: # breaking whole tree
             # get to bottom of tree
             while ((block.x, block.y - 1) in chunk.blocks and
@@ -214,22 +218,24 @@ class Game:
             # break every log in the tree
             while block.type.name == "LOG" and block.natural:
                 chunk.blocks[(block.x, block.y)] = Air(app, block.x, block.y, block.chunkInd)
+                app.game.blocks.remove(block)
                 randPos = random.random() * 0.8 - 0.4
-                item = Item(block.type.name, block.x + randPos, block.y,
+                item = Item(app, block.type.name, block.x + randPos, block.y,
                             block.chunkInd, canPlace=True,
                             dx=randPos, dy=-0.2)
                 chunk.generateAir(app, block) # add air around block
                 chunk.ungenerateAir(app, block) # remove air that isn't in contact with a solid block
-                chunk.items.append(item)
+                chunk.items.add(item)
                 if (block.x, block.y + 1) in chunk.blocks:
                     block = chunk.blocks[(block.x, block.y + 1)]
                 else:
                     break
         else: # any other type of block
             chunk.blocks[(block.x, block.y)] = Air(app, block.x, block.y, block.chunkInd)
+            app.game.blocks.remove(block)
             chunk.generateAir(app, block)
             chunk.ungenerateAir(app, block)
-            chunk.items.append(item)
+            chunk.items.add(item)
         return item
 
     def placeBlock(self, app, item: Item, block: Block):
@@ -276,7 +282,7 @@ class Game:
             mob = Mushroom(app, x, y)
         else:
             mob = Slime(app, x, y)
-        self.getChunk(app, block.chunkInd).mobs.append(mob)
+        self.getChunk(app, block.chunkInd).mobs.add(mob)
         return mob
 
 class Player(Entity):
@@ -307,15 +313,16 @@ class Player(Entity):
 
         super().__init__(self.respawnPoint[0], self.respawnPoint[1])
         self.sneak = False
-        self.image = Image.open("assets/boris.png").resize((int(UNIT_WH * 0.8), int(UNIT_WH * 0.8)))
+        self.originalImage = pygame.transform.scale(getImage(app, "boris"), (int(UNIT_WH * 0.8), int(UNIT_WH * 0.8)))
+        self.image = self.originalImage
+        self.rect = self.image.get_rect()
     
         self.suffocationDamage = True
     
     def getSprite(self):
-        image = self.image.copy()
         if self.orient == -1:
-            image = image.transpose(method=Image.Transpose.FLIP_LEFT_RIGHT)
-        return ImageTk.PhotoImage(image)
+            return pygame.transform.flip(self.image, True, False)
+        return self.image
 
     def pickUp(self, app, item: InventoryItem):
         for i in range(len(self.inventory)):
@@ -338,8 +345,8 @@ class Player(Entity):
                 newX = self.x + 1
                 dx = 0.4
             chunk = app.game.getChunk(app, self.chunk)
-            chunk.items.append(
-                item.toItem(self.chunk, newX, self.y, count=1,  canPickUp=False, dx=dx, dy=-0.3)
+            chunk.items.add(
+                item.toItem(app, self.chunk, newX, self.y, count=1,  canPickUp=False, dx=dx, dy=-0.3)
             )
             if inInventory:
                 item.count -= 1
@@ -358,13 +365,13 @@ class Player(Entity):
                 self.updateCanCraft(app)
                 return
 
-    def update(self, app):
+    def tick(self, app):
         if FALL_DAMAGE:
             if self.dy > 0:
                 self.falling += 1
             else:
-                if self.falling > 12:
-                    dist = self.falling - 12
+                if self.falling > 24:
+                    dist = self.falling - 24
                     self.health -= dist
                 self.falling = 0
         if self.health <= 0:
@@ -373,8 +380,13 @@ class Player(Entity):
         for _ in range(abs(int(self.dx / 0.25))):
             parallax = 1 if self.dx < 0 else -1
             app.game.bgX = [app.game.bgX[bg] + parallax for bg in range(len(app.game.bgX))]
+        
+        if self.orient == -1:
+            self.image = pygame.transform.flip(self.originalImage, True, False)
+        else:
+            self.image = self.originalImage
 
-    def moveLeft(self, app, dx=-0.8):
+    def moveLeft(self, app, dx=-PLAYER_SPEED):
         ground = getGround(app, math.floor(self.x), self.y) - 1
         self.orient = -1
         self.dx = dx
@@ -389,7 +401,7 @@ class Player(Entity):
         self.chunk = newChunk
         app.func.updateHovering(app)
     
-    def moveRight(self, app, dx=0.8):
+    def moveRight(self, app, dx=PLAYER_SPEED):
         ground = getGround(app, math.ceil(self.x), self.y) - 1
         self.orient = 1
         self.dx = dx
@@ -407,14 +419,14 @@ class Player(Entity):
     def moveDown(self, app):
         curBlock = getBlockFromCoords(app, roundHalfUp(self.x), self.y - 1)
         if curBlock and curBlock.solid == 0.5:
-            self.y = getBlockFromCoords(app, roundHalfUp(self.x), self.y - 1).y - 1
+            curBlock.toggleDensity()
     
     def die(self, app):
         # drop items
         chunk = app.game.getChunk(app, self.chunk)
         for item in self.inventory:
             if not item: continue
-            chunk.items.append(item.toItem(self.chunk, self.x, self.y, canPickUp=True, count=item.count))
+            chunk.items.add(item.toItem(app, self.chunk, self.x, self.y, canPickUp=True, count=item.count))
         
         # check around respawn point for valid spawn point
         block = getBlockFromCoords(app, self.respawnPoint[0], self.respawnPoint[1])
@@ -443,7 +455,7 @@ class Player(Entity):
     def hit(self, app, isRight):
         curChunk = app.game.getChunk(app, self.chunk)
         rightChunk = app.game.getChunk(app, self.chunk + 1)
-        mobs = curChunk.mobs + rightChunk.mobs
+        mobs = curChunk.mobs.sprites() + rightChunk.mobs.sprites()
         for mob in mobs:
             if isRight:
                 withinXRange = mob.x > self.x and mob.x < self.x + 2
@@ -475,9 +487,6 @@ class Functionality:
         self.hoveringRect = None
         self.debug = True
         self.selectedInventory = 0
-        self.keys = []
-        self.keysDelay = 10
-        self.keysTimer = 0
         self.canInteract = False
         self.holding = None
         self.goodGraphics = False
@@ -497,16 +506,16 @@ class Functionality:
         if key == K_SLASH:
             self.debug = not self.debug
         if keyIsNumber(key):
-            if key != K_0: self.selectedInventory = key - 48
+            if key != K_0: self.selectedInventory = key - 49
         if key == K_g:
             self.goodGraphics = not self.goodGraphics
         if key == K_MINUS and self.debug:
             rand = random.randint(0, 1)
             chunk = app.game.getChunk(app, app.player.chunk)
             if rand == 0:
-                chunk.mobs.append(Mushroom(app, app.player.x, app.player.y))
+                chunk.mobs.add(Mushroom(app, app.player.x, app.player.y))
             else:
-                chunk.mobs.append(Slime(app, app.player.x, app.player.y))
+                chunk.mobs.add(Slime(app, app.player.x, app.player.y))
         if key == K_e:
             self.isCrafting = not self.isCrafting
         if key == K_RIGHT and self.isCrafting:
@@ -546,25 +555,27 @@ class Functionality:
         """
         PLAYER
         """
-        if KMOD_LSHIFT:
+        if pygame.key.get_pressed()[K_LSHIFT]:
             app.player.sneak = True
             slow = 0.5
+        elif app.player.dy != 0:
+            slow = 0.6
         else:
             app.player.sneak = False
             slow = 1
 
-        if key == K_w and isOnGround(app, app.player.x, app.player.y):
-            app.player.dy -= 0.8 * slow
+        if key == K_w and app.player.dy == 0: # JUMP
+            app.player.dy -= 0.64 * slow
         
-        if key == K_a:
-            app.player.moveLeft(app, -0.8 * slow)
-        elif key == K_d:
-            app.player.moveRight(app, 0.8 * slow)
+        if key == K_a: # LEFT
+            app.player.moveLeft(app, -PLAYER_SPEED * slow)
+        elif key == K_d: # RIGHT
+            app.player.moveRight(app, PLAYER_SPEED * slow)
         checkBackground(app)
-        if key == K_s:
+        if key == K_s: # DOWN
             app.player.moveDown(app)
 
-        if key == K_q:
+        if key == K_q: # THROW
             app.player.throwItem(app, app.player.inventory[self.selectedInventory],
                                  inInventory=True)
 
@@ -572,11 +583,6 @@ class Functionality:
         GAME
         """
         generateChunks(app)
-
-    def handleKeys(self, app):
-        for _ in range(len(self.keys)):
-            self.handleKey(app, self.keys[0])
-            self.keys.pop(0)
     
     def updateHovering(self, app):
         if self.isCrafting and withinBounds(app.width * 0.1, app.height * 0.76,
