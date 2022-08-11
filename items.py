@@ -1,10 +1,11 @@
 from helpers import *
 
 class InventoryItem():
-    def __init__(self, name: str, count = 1, canPlace = False):
+    def __init__(self, name: str, count = 1, canPlace = False, stackMax = STACK_MAX):
         self.name = name
         self.count = count
         self.canPlace = canPlace
+        self.stackMax = stackMax
 
     def toItem(self, app, chunk, x, y, canPickUp=True, dx=0, dy=0, count=1):
         return Item(app, self.name, x, y, chunk, count=(count if count else self.count), canPlace=self.canPlace, canPickUp=canPickUp,
@@ -14,8 +15,8 @@ class InventoryItem():
         self.count += count
         if self.count < 0:
             self.count = 0
-        if self.count > STACK_MAX:
-            self.count = STACK_MAX
+        if self.count > self.stackMax:
+            self.count = self.stackMax
 
     def __eq__(self, other):
         return self.name == other.name
@@ -41,11 +42,27 @@ class Apple(InventoryItem):
         super().__init__("apple", count = count)
         self.food = True
         self.foodValue = 2
+    
+class WoodenSword(InventoryItem):
+    def __init__(self, count = 1, *args, **kwargs):
+        self.attackDamage = 2
+        self.attackCooldown = 20
+        self.curCooldown = 0
+        super().__init__("wood_sword", count = count, stackMax = 1)
 
-class Item(Entity, pygame.sprite.Sprite):
+class WoodenPickaxe(InventoryItem):
+    def __init__(self, count = 1, *args, **kwargs):
+        self.attackDamage = 2
+        self.attackCooldown = 20
+        self.curCooldown = 0
+        
+        self.mineLevel = 2
+        super().__init__("wood_pickaxe", count = count, stackMax = 1)
+
+class Item(Entity):
     def __init__(self, app, name: str, x, y, chunk,  count = 1, canPlace = False,
                  canPickUp = True, dx = 0, dy = 0, inventoryClass=InventoryItem):
-        pygame.sprite.Sprite.__init__(self)
+        super().__init__(x, y, dx=dx, dy=dy)
         self.name = name
         self.count = count
         self.canPlace = canPlace
@@ -62,7 +79,6 @@ class Item(Entity, pygame.sprite.Sprite):
         else:
             self.canPickUp = 0
         self.inventoryClass = inventoryClass
-        super().__init__(x, y, dx=dx, dy=dy)
     # def __eq__(self, other):
     #     return (self.name == other.name and
     #         self.x == other.x and

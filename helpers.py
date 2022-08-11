@@ -62,13 +62,17 @@ class Entity(pygame.sprite.Sprite):
         blockTopLeft = getBlockFromCoords(app, math.floor(self.x), math.floor(self.y + 1))
         blockTopRight = getBlockFromCoords(app, math.ceil(self.x), math.floor(self.y + 1))
         blockBelow = getBlockFromCoords(app, roundHalfUp(self.x), math.floor(self.y) - 1)
+        
+        selfWidth = self.rect.width / UNIT_WH
+        selfHeight = self.rect.height / UNIT_WH
+        
         if blockTopLeft and blockTopLeft.solid:
             blockTop = blockTopLeft
         elif blockTopRight and blockTopRight.solid:
             blockTop = blockTopRight
         else:
             blockTop = None
-        onGround = isOnGround(app, self.x, self.y - self.dy)
+        onGround = isOnGround(app, self.x, self.y - self.dy, selfWidth)
         
         # Right Collision
         if 0 < self.dx:
@@ -84,11 +88,11 @@ class Entity(pygame.sprite.Sprite):
                 onGround and
                 not sneak):
                 self.x = blockRight.x
-                self.y = blockRight.y + 1
+                self.y = blockRight.y + selfHeight
                 self.dx = 0.01
             elif blockRight and blockRight.solid:
                 self.dx = 0
-                self.x = blockRight.x - 0.9
+                self.x = blockRight.x - selfWidth
 
         # Left Collision
         elif self.dx < 0:
@@ -100,19 +104,23 @@ class Entity(pygame.sprite.Sprite):
             if (blockLeft and blockLeft.solid and not topBlock
                 and freeDiagBlock and onGround and not sneak):
                 self.x = blockLeft.x + 1
-                self.y = blockLeft.y + 1
+                self.y = blockLeft.y + selfHeight
                 self.dx = -0.01
             elif blockLeft and blockLeft.solid:
                 self.dx = 0
-                self.x = blockLeft.x + 1.1
+                self.x = blockLeft.x + 1
 
         # Gravity Collision
-        if isOnGround(app, self.x, self.y) and self.dy > 0:
+        if isOnGround(app, self.x, self.y, selfWidth) and self.dy > 0:
             onGround = True
             self.dy = 0
             groundLeft = getGround(app, math.floor(self.x), self.y)
-            groundRight = getGround(app, math.floor(self.x + 0.8), self.y)
-            self.y = max(groundLeft, groundRight)
+            groundRight = getGround(app, math.floor(self.x + selfWidth), self.y)
+            if self.x + selfWidth > math.floor(self.x + selfWidth):
+                ground = max(groundLeft, groundRight)
+            else:
+                ground = groundLeft
+            self.y = ground - 1 + selfHeight
         
         # Top Collision
         if self.dy != 0 and blockTop and blockTop.solid == 1:
@@ -120,7 +128,7 @@ class Entity(pygame.sprite.Sprite):
                 leftOverlap = hasOverlap(
                     (blockTopLeft.x, blockTopLeft.y,
                         blockTopLeft.x + 1, blockTopLeft.y + 1),
-                    (self.x, self.y - self.dy, self.x + 0.8, self.y - self.dy + 0.8)
+                    (self.x, self.y - self.dy, self.x + selfWidth, self.y - self.dy + selfWidth)
                 )
             else:
                 leftOverlap = False
@@ -128,16 +136,16 @@ class Entity(pygame.sprite.Sprite):
                 rightOverlap = hasOverlap(
                     (blockTopRight.x, blockTopRight.y,
                         blockTopRight.x + 1, blockTopRight.y + 1),
-                    (self.x, self.y - self.dy, self.x + 0.8, self.y - self.dy + 0.8)
+                    (self.x, self.y - self.dy, self.x + selfWidth, self.y - self.dy + selfWidth)
                 )
             else:
                 rightOverlap = False
             if leftOverlap and blockTopLeft.solid == 1:
                 self.dy = 0
-                self.y = blockTopLeft.y - 1
+                self.y = blockTopLeft.y - selfHeight
             if rightOverlap and blockTopRight.solid == 1:
                 self.dy = 0
-                self.y = blockTopRight.y - 1
+                self.y = blockTopRight.y - selfHeight
 
 ###############################################################################
 # HELPER FUNCS
@@ -152,15 +160,15 @@ def getBlockFromCoords(app, x, y):
             return chunk.blocks[(x, y)]
     return None
 
-def isOnGround(app, x, y):
+def isOnGround(app, x, y, width):
     groundLeft = getGround(app, math.floor(x), y)
-    groundRight = getGround(app, math.floor(x + 0.8), y)
+    groundRight = getGround(app, math.floor(x + width), y)
     if y - groundLeft <= 0.4 or y - groundRight <= 0.4:
         return True
     return False
 
 def getCoordsFromPix(app, xPix, yPix):
-    blockY = math.ceil(-(yPix - app.height * 0.6) / UNIT_WH) + app.player.y
+    blockY = math.ceil(-(yPix - app.height * 0.7) / UNIT_WH) + app.player.y
     for chunk in app.game.loaded:
         for b in range(CHUNK_SIZE):
             if (b + chunk.x, blockY) in chunk.blocks:
@@ -176,7 +184,7 @@ def getPixX(app, x):
     return ((x - app.player.x) * UNIT_WH) + (app.width // 2)
 
 def getPixY(app, y):
-    return (app.height * 0.6) + ((app.player.y - y) * UNIT_WH)
+    return (app.height * 0.7) + ((app.player.y - y) * UNIT_WH)
 
 def getGround(app, x, y, ignoreHalfBlocks = False):
     for chunk in app.game.loaded:
@@ -270,7 +278,7 @@ def getBackgroundColor(time):
 def hasOverlap(r1, r2):
     x1, y1, x2, y2 = r1
     x3, y3, x4, y4 = r2
-    return (x1 <= x3 <= x2 or x1 <= x4 <= x2) and (y1 <= y3 <= y2 or y1 <= y4 <= y2)
+    return (x1 < x3 < x2 or x1 < x4 < x2) and (y1 < y3 < y2 or y1 < y4 < y2)
 
 def isOverEnemy(app, x, y):
     chunkIndex = app.game.getChunkIndex(x)
@@ -284,41 +292,10 @@ def isOverEnemy(app, x, y):
             return mob
     return False
 
-def canBeMade(app, recipe):
-    items = {}
-    for inv in app.player.inventory:
-        if not inv: continue
-        if inv.name in items.keys():
-            items[inv.name] += inv.count
-        else:
-            items[inv.name] = inv.count
-    for name, count in recipe["ingredients"].items():
-        if name not in items or items[name] < count:
-            return False
-    return True
-
 def makeRecipe(app, recipe):
     for item, count in recipe["ingredients"].items():
         app.player.removeItem(app, item, count)
     app.player.pickUp(app, copy.deepcopy(recipe["output"]))
-
-def numCanCraft(app, recipe):
-    if not canBeMade(app, recipe): return
-    items = {}
-    for inv in app.player.inventory:
-        if not inv: continue
-        if inv.name in items.keys():
-            items[inv.name] += inv.count
-        else:
-            items[inv.name] = inv.count
-    
-    # get maximum number of recipe that can be made
-    maxCount = 0
-    for name, count in recipe["ingredients"].items():
-        if name not in items:
-            return 0
-        maxCount += items[name] // count
-    return maxCount
 
 def getColors(image):
     im  = np.array(image)
@@ -389,3 +366,9 @@ def getPath(app, x1, y1, x2, y2, depth = 0, path = [], maxDepth = 5):
 def keyIsNumber(k):
     nums = [pygame.K_0, pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4, pygame.K_5, pygame.K_6, pygame.K_7, pygame.K_8, pygame.K_9]
     return k in nums
+
+def inLoaded(app, x):
+    for chunk in app.game.loaded:
+        if chunk.inChunk(x):
+            return True
+    return False
