@@ -212,12 +212,6 @@ def checkBackground(app):
     if max(app.game.bgX) < app.width: # Right
             app.game.bgX = app.game.bgX + [max(app.game.bgX) + width]
 
-    newList = []
-    for i in app.game.bgX: # Garbage Collector
-        if i > - app.background.get_width():
-            newList.append(i)
-        if i < app.width:
-            newList.append(i)
 def roundHalfUp(d):  # helper-fn
     # Round to nearest with ties going away from zero.
     rounding = decimal.ROUND_HALF_UP

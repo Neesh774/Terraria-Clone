@@ -203,7 +203,15 @@ class Game:
         chunksOnScreen = int(app.width / (CHUNK_SIZE * UNIT_WH)) + 2
         startChunkIndex = app.player.chunk - math.floor(chunksOnScreen / 2)
         endChunkIndex = startChunkIndex + chunksOnScreen
-        self.loaded = [self.chunks[i] for i in self.chunks if startChunkIndex <= i <= endChunkIndex]
+        loaded = [self.chunks[i] for i in self.chunks if startChunkIndex <= i <= endChunkIndex]
+
+        for chunk in self.loaded:
+            self.blocks.remove(*chunk.blocks.values())
+        
+        for chunk in loaded:
+            self.blocks.add(*chunk.blocks.values())
+
+        self.loaded = loaded
     
     def breakBlock(self, app, block: Block, drop=True):
         chunk = self.getChunk(app, block.chunkInd)
@@ -261,27 +269,28 @@ class Game:
         bottom_side = int(app.player.y + PLAYER_MOB_SPAWN_RADIUS)
         x = random.randint(left_side, right_side)
         y = random.randint(top_side, bottom_side)
-        isNight = app.game.time < 6 or app.game.time > 18
-        if x > app.player.x - 3 and x < app.player.x + 3:
+        if x > app.player.x - 3 and x < app.player.x + 3: # within player
             return
         if y > app.player.y - 3 and y < app.player.y + 3:
             return
         block = getBlockFromCoords(app, x, y)
-        if not block or block.solid:
+        if not block or block.solid: # if there's no block or it's a solid block
             return
         chunk = self.getChunk(app, block.chunkInd)
-        if len(chunk.mobs) >= MOB_LIMIT:
+        if len(chunk.mobs) >= MOB_LIMIT: # over mob limit in chunk
             return
         onGround = isOnGround(app, x, y)
         if not onGround:
             return
-        for mob in chunk.mobs:
+        for mob in chunk.mobs: # within other mob
             if mob.x - 1 < x < mob.x + 1 and mob.y - 1 < y < mob.y + 1:
                 return
-        if y > GROUND_LEVEL and isNight:
+        if y > GROUND_LEVEL:
             mob = Mushroom(app, x, y)
         else:
             mob = Slime(app, x, y)
+        if pygame.sprite.spritecollideany(mob, app.game.blocks):
+            return
         self.getChunk(app, block.chunkInd).mobs.add(mob)
         return mob
 
@@ -316,9 +325,10 @@ class Player(Entity):
         self.originalImage = pygame.transform.scale(getImage(app, "boris"), (int(UNIT_WH * 0.8), int(UNIT_WH * 0.8)))
         self.image = self.originalImage
         self.rect = self.image.get_rect()
-    
+
         self.suffocationDamage = True
-    
+        self.spawnInvincibility = 0
+
     def getSprite(self):
         if self.orient == -1:
             return pygame.transform.flip(self.image, True, False)
@@ -366,7 +376,7 @@ class Player(Entity):
                 return
 
     def tick(self, app):
-        if FALL_DAMAGE:
+        if FALL_DAMAGE and self.spawnInvincibility == 0:
             if self.dy > 0:
                 self.falling += 1
             else:
@@ -374,6 +384,8 @@ class Player(Entity):
                     dist = self.falling - 24
                     self.health -= dist
                 self.falling = 0
+        if self.spawnInvincibility > 0:
+            self.spawnInvincibility -= 1
         if self.health <= 0:
             app.paused = True
             app.deathScreen = True
@@ -449,6 +461,7 @@ class Player(Entity):
         self.dy = 0
         self.orient = 1
         self.chunk = 9
+        self.spawnInvincibility = 100
         
         self.inventory = [None] * 9
     
@@ -478,7 +491,7 @@ class Player(Entity):
             if canBeMade(app, recipe):
                 canCraft.append(recipe)
         self.canCraft = canCraft
-    
+
 class Functionality:
     def __init__(self, app):
         self.mouseX = 0

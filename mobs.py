@@ -52,6 +52,8 @@ class Enemy(Entity):
             self.moveRight(amount)
 
     def attack(self, app):
+        if app.player.spawnInvincibility > 0:
+            return
         app.player.health -= self.damage
         if self.x < app.player.x:
             app.player.dy -= 0.2

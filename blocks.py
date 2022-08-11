@@ -22,6 +22,9 @@ class Block(pygame.sprite.Sprite):
         app.game.blocks.add(self)
     
     def update(self, app):
+        loadedIndices = [chunk.index for chunk in app.game.loaded]
+        if self.chunkInd not in loadedIndices:
+            self.kill()
         self.rect.x, self.rect.y = getPixFromCoords(app, self.x, self.y)
 
         self.image.blit(self.originalImage, (0, 0))

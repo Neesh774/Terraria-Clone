@@ -17,6 +17,8 @@ def appStarted(app):
     ASSETS_DIR = "assets"
     app.width = 500
     app.height = 500
+    import settings
+    settings.UNIT_WH = app.width / (CHUNK_SIZE * 3.5)
     app.images = {}
 
     app.background = pygame.image.load(os.path.join(ASSETS_DIR, 'background.png'))
@@ -109,7 +111,8 @@ def drawChunk(app, screen: pygame.Surface, chunk: Chunk):
 def drawGame(app, screen: pygame.Surface):
     pygame.draw.rect(screen, getBackgroundColor(app.game.time), (0, 0, app.width, app.height), 0)
 
-    screen.blit(app.background, (0, 0))
+    for bgX in app.game.bgX:
+        screen.blit(app.background, (bgX, 0))
     
     pygame.draw.rect(screen, "#050505", (0, getPixY(app, GROUND_LEVEL - GRASS_LEVEL - TERRAIN_VARIATION),
                             app.width, app.height * 2), 0)
@@ -190,20 +193,20 @@ def drawHotbar(app, screen: pygame.Surface):
     
 def drawSettings(app, screen):
     left = app.width * 0.1
-    top = app.height * 0.1
+    top = app.height * 0.05
     width = app.width * 0.8
-    height = app.height * 0.8
+    height = app.height * 0.9
     pygame.draw.rect(screen, "#C79355", (left, top, width, height), 0)
     for i, (action, keybind) in enumerate(KEYBINDS.items()):
-        cell_height = (height * 0.1) + 2
+        cell_height = (height * 0.09) + 2
         row = i * cell_height
         leftCentX = app.width * 0.23
-        leftCentY = row + top + (cell_height - 8) / 2
+        leftCentY = row + top + (cell_height) / 2
 
         actionText = app.font.render(action, 1, "#38332F")
         screen.blit(actionText, (leftCentX, leftCentY))
 
-        box = pygame.draw.rect(screen, "#9D7039", (app.width * 0.52, row + top + 20, width * 0.26, cell_height - 20), 0)
+        box = pygame.draw.rect(screen, "#9D7039", (app.width * 0.52, row + top + 25, width * 0.26, cell_height - 25), 0)
         keybindText = app.font.render(keybind, 1, "#38332F")
         pos = keybindText.get_rect()
         pos.centerx, pos.centery = box.center
@@ -279,8 +282,6 @@ def redrawAll(app, screen:pygame.Surface):
             drawSettings(app, screen)
         if app.func.isCrafting:
             drawCrafting(app, screen)
-    # screen.create_image(app.func.mouseX, app.func.mouseY, image=getImage(app, "cursor"),
-    #                     anchor="nw")
 
 
 def timerFired(app):
@@ -325,6 +326,7 @@ def main():
     app = App()
     
     pygame.time.set_timer(pygame.USEREVENT + 1, 20)
+    pygame.mouse.set_cursor(pygame.cursors.tri_left)
     
     while True: # main event loop
         app.game.loadChunks(app)
