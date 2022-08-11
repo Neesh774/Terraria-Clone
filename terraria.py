@@ -18,7 +18,11 @@ def appStarted(app):
     app.width = 500
     app.height = 500
     app.images = {}
+
     app.background = pygame.image.load(os.path.join(ASSETS_DIR, 'background.png'))
+    scale = app.height / app.background.get_height()
+    app.background = pygame.transform.scale(app.background, (int(app.background.get_width() * scale), int(app.background.get_height() * scale)))
+    
     for f in os.listdir("assets"):
         if not f.endswith(".png"):
             continue
@@ -48,10 +52,8 @@ def keyPressed(app, event):
         app.func.handleKey(app, event)
 
 def sizeChanged(app):
-    if app.width > 720:
-        return app.setSize(720, app.height)
-    if app.height > 480:
-        return app.setSize(app.width, 480)
+    scale = app.height / app.background.get_height()
+    app.background = pygame.transform.scale(app.background, (int(app.background.get_width() * scale), int(app.background.get_height() * scale)))
     generateChunks(app)
     checkBackground(app)
 
@@ -98,7 +100,7 @@ def drawChunk(app, screen: pygame.Surface, chunk: Chunk):
             if r == chunk.x and app.func.debug:
                 x, _ = getPixFromCoords(app, block.x, block.y)
                 pygame.draw.rect(screen, ("red" if chunk.x == app.game.getChunk(app, app.player.chunk).x else "black"),
-                                 (x, 0, (CHUNK_SIZE * UNIT_WH), app.height), 1)
+                                 (x, -5, (CHUNK_SIZE * UNIT_WH), app.height + 5), 1)
     
     chunk.items.draw(screen)
 
@@ -107,10 +109,7 @@ def drawChunk(app, screen: pygame.Surface, chunk: Chunk):
 def drawGame(app, screen: pygame.Surface):
     pygame.draw.rect(screen, getBackgroundColor(app.game.time), (0, 0, app.width, app.height), 0)
 
-    pygame.draw.rect(screen, "#2D404F", (0, app.height * 0.5, app.width, app.height), 0)
-
-    for bgX in app.game.bgX:
-        screen.blit(app.background, (bgX, app.height * 0.2))
+    screen.blit(app.background, (0, 0))
     
     pygame.draw.rect(screen, "#050505", (0, getPixY(app, GROUND_LEVEL - GRASS_LEVEL - TERRAIN_VARIATION),
                             app.width, app.height * 2), 0)
@@ -122,7 +121,7 @@ def drawGame(app, screen: pygame.Surface):
 
 def drawPlayer(app, screen: pygame.Surface):
     x = app.width / 2
-    y = app.height * 0.6
+    y = app.height * TERRAIN_HEIGHT
     screen.blit(app.player.getSprite(), (x + 0.2, y + 4))
 
 def drawDebug(app, screen: pygame.Surface):
@@ -171,10 +170,12 @@ def drawHotbar(app, screen: pygame.Surface):
         if item:
             image = pygame.transform.scale(getImage(app, item.name), (itemWidth - 8, itemWidth - 8))
             screen.blit(image, (left + 5, 20))
-            count = app.smallFont.render(f"{item.count}", 1, "#38332F")
-            pos = count.get_rect()
-            pos.left, pos.centery = (left + 2, itemWidth - 4)
-            screen.blit(count, pos)
+            
+            if item.count > 1:
+                count = app.smallFont.render(f"{item.count}", 1, "#38332F")
+                pos = count.get_rect()
+                pos.left, pos.centery = (left + 2, itemWidth - 4)
+                screen.blit(count, pos)
 
     for h in range(0, 10):
         x = app.width - (h + 1) * (18 + 4)
@@ -299,9 +300,9 @@ def timerFired(app):
         for chunk in app.game.loaded:
             chunk.update(app)
 
-        # randomChance = random.randint(0, 50)
-        # if randomChance == 0:
-        #     app.game.spawnMob(app)
+        randomChance = random.randint(0, 50)
+        if randomChance == 0:
+            app.game.spawnMob(app)
         """
         FUNC
         """
@@ -316,7 +317,7 @@ class App:
 
 def main():
     pygame.init()
-    screen = pygame.display.set_mode((500, 500))
+    screen = pygame.display.set_mode((500, 500), pygame.RESIZABLE)
     pygame.display.set_caption("Terraria")
     
     pygame.key.set_repeat(150, 30)
@@ -339,7 +340,9 @@ def main():
                 mouseMoved(app, event.pos)
             elif event.type == MOUSEBUTTONUP:
                 mouseReleased(app)
-            elif event.type == WINDOWRESIZED:
+            elif event.type == VIDEORESIZE:
+                app.width = screen.get_width()
+                app.height = screen.get_height()
                 sizeChanged(app)
             elif event.type == pygame.USEREVENT + 1:
                 timerFired(app)

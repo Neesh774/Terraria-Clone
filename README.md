@@ -4,6 +4,8 @@
 
 A clone of Terraria written in Python with Tkinter and CMU_112_Graphics.
 
+[Cool video showing off the project](https://youtu.be/68lswXZ8bbA)
+
 ### Project Description
 
 A clone of Terraria that has a different UI and some different aspects of gameplay.

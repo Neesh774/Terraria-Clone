@@ -68,6 +68,7 @@ class Entity(pygame.sprite.Sprite):
             blockTop = blockTopRight
         else:
             blockTop = None
+        
         onGround = isOnGround(app, self.x, self.y - self.dy)
         
         # Right Collision
@@ -160,7 +161,7 @@ def isOnGround(app, x, y):
     return False
 
 def getCoordsFromPix(app, xPix, yPix):
-    blockY = math.ceil(-(yPix - app.height * 0.6) / UNIT_WH) + app.player.y
+    blockY = math.ceil(-(yPix - app.height * TERRAIN_HEIGHT) / UNIT_WH) + app.player.y
     for chunk in app.game.loaded:
         for b in range(CHUNK_SIZE):
             if (b + chunk.x, blockY) in chunk.blocks:
@@ -176,7 +177,7 @@ def getPixX(app, x):
     return ((x - app.player.x) * UNIT_WH) + (app.width // 2)
 
 def getPixY(app, y):
-    return (app.height * 0.6) + ((app.player.y - y) * UNIT_WH)
+    return (app.height * TERRAIN_HEIGHT) + ((app.player.y - y) * UNIT_WH)
 
 def getGround(app, x, y, ignoreHalfBlocks = False):
     for chunk in app.game.loaded:
@@ -205,10 +206,11 @@ def moveBlock(app, block, canvas):
     canvas.moveto(image, x, y)
 
 def checkBackground(app):
+    width = app.background.get_width()
     if min(app.game.bgX) > 0: # Left
-            app.game.bgX = [0] + app.game.bgX
+            app.game.bgX = [min(app.game.bgX) - width] + app.game.bgX
     if max(app.game.bgX) < app.width: # Right
-            app.game.bgX = app.game.bgX + [max(app.game.bgX) + app.background.get_width()]
+            app.game.bgX = app.game.bgX + [max(app.game.bgX) + width]
 
     newList = []
     for i in app.game.bgX: # Garbage Collector

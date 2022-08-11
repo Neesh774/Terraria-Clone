@@ -288,7 +288,7 @@ class Game:
 class Player(Entity):
     def __init__(self, app):
         self.chunk = 9
-        self.inventory = [InventoryItem("PLANKS", 32, True)] + [None] * 8
+        self.inventory = [None] * 9
         self.orient = 1
         self.health = 10
         self.falling = 0
