@@ -14,9 +14,10 @@ PLAYER_MOB_SPAWN_RADIUS = 12
 PLAYER_SPEED = 0.37
 
 KEYBINDS = {
-  "Jump": "Space",
-  "Left": "Left",
-  "Right": "Right",
+  "Jump": "w",
+  "Left": "a",
+  "Right": "d",
+  "Down": "s",
   "Throw Item": "q",
   "Toggle Graphics": "g",
   "Open Keybinds": "k",
