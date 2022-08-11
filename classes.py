@@ -1,4 +1,3 @@
-from calendar import c
 from curses import KEY_ENTER
 import math
 import random
@@ -37,7 +36,7 @@ class Chunk:
             row_ground_level = height
             row_grass_level = height - GRASS_LEVEL - random.randint(0, 2)
             row_dirt_level = height - DIRT_LEVEL - random.randint(-1, 1)
-            for r in range(row_ground_level, -1, -1):
+            for r in range(row_ground_level + 1, -1, -1):
                 if r >= row_ground_level: # 24
                     block = Air(app, x+i, r, chunkI)
                 elif r >= row_grass_level: # 9
@@ -204,11 +203,7 @@ class Game:
         chunksOnScreen = int(app.width / (CHUNK_SIZE * UNIT_WH)) + 2
         startChunkIndex = app.player.chunk - math.floor(chunksOnScreen / 2)
         endChunkIndex = startChunkIndex + chunksOnScreen
-        loaded = [self.chunks[i] for i in self.chunks if startChunkIndex <= i <= endChunkIndex]
-        for chunk in loaded:
-            for block in chunk.blocks:
-                self.blocks.add(chunk.blocks[block])
-        self.loaded = loaded
+        self.loaded = [self.chunks[i] for i in self.chunks if startChunkIndex <= i <= endChunkIndex]
     
     def breakBlock(self, app, block: Block, drop=True):
         chunk = self.getChunk(app, block.chunkInd)
@@ -277,7 +272,7 @@ class Game:
         chunk = self.getChunk(app, block.chunkInd)
         if len(chunk.mobs) >= MOB_LIMIT:
             return
-        onGround = isOnGround(app, x, y, 1)
+        onGround = isOnGround(app, x, y)
         if not onGround:
             return
         for mob in chunk.mobs:
@@ -299,7 +294,6 @@ class Player(Entity):
         self.falling = 0
         self.respawnPoint = (0.1, GROUND_LEVEL)
         self.canCraft = []
-        self.updateCanCraft(app)
 
 
         block = getBlockFromCoords(app, self.respawnPoint[0], self.respawnPoint[1])
@@ -332,7 +326,7 @@ class Player(Entity):
 
     def pickUp(self, app, item: InventoryItem):
         for i in range(len(self.inventory)):
-            if self.inventory[i] and self.inventory[i] == item and self.inventory[i].count < self.inventory[i].stackMax:
+            if self.inventory[i] and self.inventory[i] == item and self.inventory[i].count < STACK_MAX:
                 self.inventory[i].addToCount(item.count)
                 self.updateCanCraft(app)
                 return
@@ -462,18 +456,17 @@ class Player(Entity):
         curChunk = app.game.getChunk(app, self.chunk)
         rightChunk = app.game.getChunk(app, self.chunk + 1)
         mobs = curChunk.mobs.sprites() + rightChunk.mobs.sprites()
-        damage = self.getAttackDamage(app)
         for mob in mobs:
             if isRight:
                 withinXRange = mob.x > self.x and mob.x < self.x + 2
                 withinYRange = mob.y >= self.y and mob.y <= self.y + 1
                 if withinXRange and withinYRange:
-                    mob.takeDamage(app, damage)
+                    mob.takeDamage(app, 1)
             else:
                 withinXRange = mob.x < self.x and mob.x > self.x - 2
                 withinYRange = mob.y >= self.y and mob.y <= self.y + 1
                 if withinXRange and withinYRange:
-                    mob.takeDamage(app, damage)
+                    mob.takeDamage(app, 1)
     def eat(self, food):
         self.health += food.foodValue
         if self.health > 10:
@@ -482,50 +475,9 @@ class Player(Entity):
     def updateCanCraft(self, app):
         canCraft = []
         for recipe in recipes:
-            if self.canBeMade(app, recipe):
+            if canBeMade(app, recipe):
                 canCraft.append(recipe)
         self.canCraft = canCraft
-    
-    def canBeMade(self, app, recipe):
-        items = {}
-        for inv in self.inventory:
-            if not inv: continue
-            if inv.name in items.keys():
-                items[inv.name] += inv.count
-            else:
-                items[inv.name] = inv.count
-        for name, count in recipe["ingredients"].items():
-            if name not in items or items[name] < count:
-                return False
-        return True
-
-    def numCanCraft(self, app, recipe):
-        if not self.canBeMade(app, recipe): return
-        items = {}
-        for inv in self.inventory:
-            if not inv: continue
-            if inv.name in items.keys():
-                items[inv.name] += inv.count
-            else:
-                items[inv.name] = inv.count
-        
-        # get maximum number of recipe that can be made
-        maxCount = 0
-        for name, count in recipe["ingredients"].items():
-            if name not in items:
-                return 0
-            maxCount += items[name] // count
-        return maxCount
-
-    def getAttackDamage(self, app):
-        curInv = self.inventory[app.func.selectedInventory]
-        if not curInv or not hasattr(curInv, "attackDamage"):
-            return 1
-        else:
-            if curInv.curCooldown > 0:
-                return 1
-            else:
-                return curInv.attackDamage
     
 class Functionality:
     def __init__(self, app):
@@ -594,7 +546,7 @@ class Functionality:
         elif key == K_RETURN or key == KEY_ENTER and self.isCrafting:
             if app.func.craftingSelected < len(app.player.canCraft):
                 recipe = app.player.canCraft[app.func.craftingSelected]
-                if app.player.canBeMade(app, recipe):
+                if canBeMade(app, recipe):
                     makeRecipe(app, recipe)
                     app.player.updateCanCraft(app)
         

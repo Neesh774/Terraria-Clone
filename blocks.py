@@ -19,12 +19,9 @@ class Block(pygame.sprite.Sprite):
         self.mineLevel = mineLevel
         for key, value in kwargs.items():
             setattr(self, key, value)
-        
-        
-
+        app.game.blocks.add(self)
+    
     def update(self, app):
-        if not inLoaded(app, self.x):
-            self.kill()
         self.rect.x, self.rect.y = getPixFromCoords(app, self.x, self.y)
 
         self.image.blit(self.originalImage, (0, 0))

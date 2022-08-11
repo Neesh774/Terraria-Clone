@@ -19,17 +19,5 @@ recipes = [
             "PLANKS": 1
         },
         "output": InventoryItem("WALL", 1, canPlace=True)
-    },
-    {
-        "ingredients": {
-            "PLANKS": 5
-        },
-        "output": WoodenPickaxe(1)
-    },
-    {
-        "ingredients": {
-            "PLANKS": 4
-        },
-        "output": WoodenSword(1)
     }
 ]

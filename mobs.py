@@ -110,6 +110,7 @@ class Mushroom(Enemy):
         self.spriteIndex = 0
         self.image = self.idle[self.spriteIndex]
         self.rect = self.image.get_rect()
+        self.rect.center = (-self.width, -self.height)
 
     def mobUpdate(self):
         if self.isHurt >= 0: # hurt sprites
@@ -164,6 +165,7 @@ class Slime(Enemy):
         self.spriteIndex = 0
         self.image = self.idle[self.spriteIndex]
         self.rect = self.image.get_rect()
+        self.rect.center = (-self.width, -self.height)
     
     def mobUpdate(self):
         if self.isHurt >= 0:
