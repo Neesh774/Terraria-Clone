@@ -2,6 +2,8 @@
 
 A clone of Terraria that has a different UI and some different aspects of gameplay.
 
+[DEMO VIDEO FOR TP3](https://drive.google.com/file/d/1s6cbiRJssd1PRpy1ETBUmi1Fz0GhhVRA/view?usp=sharing)
+
 ### Structural Plan
 
 Classes:

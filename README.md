@@ -2,11 +2,11 @@
 
 ## Project: Terraria
 
-A clone of Terraria written in Python with Tkinter and CMU_112_Graphics.
+A clone of Terraria written in Python with Tkinter and PyGame.
 
 [Cool video showing off the project](https://youtu.be/68lswXZ8bbA)
 
-[DEMO VIDEO FOR TP3](https://drive.google.com/file/d/1tRAe3TX2sbNZg5mA4x9Xwen2_DBVjCGF/view?usp=sharing)
+[DEMO VIDEO FOR TP3](https://drive.google.com/file/d/1s6cbiRJssd1PRpy1ETBUmi1Fz0GhhVRA/view?usp=sharing)
 
 ## How To Run
 
