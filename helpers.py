@@ -129,6 +129,8 @@ class Entity(pygame.sprite.Sprite):
             self.dy = 0
             groundLeft = getGround(app, math.floor(self.x), self.y)
             groundRight = getGround(app, math.floor(self.x + 0.8), self.y)
+            if self.x + 0.8 == math.floor(self.x + 0.8):
+                groundRight = groundLeft
             self.y = max(groundLeft, groundRight)
         
         # Top Collision

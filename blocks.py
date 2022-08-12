@@ -3,7 +3,7 @@ from time import time
 
 class Block(pygame.sprite.Sprite):
     def __init__(self, app, x, y, block: Blocks, chunkInd, solid = 1,
-                 breakable = True, color="black", mineLevel = 0, darkness = 0,
+                 breakable = True, mineLevel = 0, darkness = 0,
                  **kwargs):
         pygame.sprite.Sprite.__init__(self)
         self.x = x
@@ -18,7 +18,6 @@ class Block(pygame.sprite.Sprite):
         self.rect = self.image.get_rect()
         self.rect.center = (-UNIT_WH, UNIT_WH)
         self.isHalf = False
-        self.color = color
         if darkness > 0:
             self.darkness = darkness
         else:
@@ -70,13 +69,12 @@ class Block(pygame.sprite.Sprite):
                 """
 class Air(Block):
     def __init__(self, app, x, y, chunkInd, darkness = 0):
-        super().__init__(app, x, y, Blocks.AIR, chunkInd, solid = False, darkness = darkness, breakable=False,
-                         color="grey2")
+        super().__init__(app, x, y, Blocks.AIR, chunkInd, solid = False, darkness = darkness, breakable=False)
         self.image = pygame.Surface((UNIT_WH, UNIT_WH))
         self.image.set_colorkey((0, 0, 0, 0))
         self.originalImage = copy.copy(self.image)
         self.rect = self.image.get_rect()
-    
+
     def update(self, app):
         self.image = pygame.Surface((UNIT_WH, UNIT_WH))
         self.image.set_colorkey((0, 0, 0, 0))
@@ -86,56 +84,54 @@ class Air(Block):
 class Grass(Block):
     def __init__(self, app, x, y, chunkInd, darkness = 0):
         super().__init__(app, x, y, Blocks.GRASS, chunkInd,
-                         darkness = darkness, color="chartreuse4")
+                         darkness = darkness)
 
 class Dirt(Block):
     def __init__(self, app, x, y, chunkInd, darkness = 0):
         super().__init__(app, x, y, Blocks.DIRT, chunkInd,
-                         darkness = darkness, color="tan4")
+                         darkness = darkness)
 
 class Stone(Block):
     def __init__(self, app, x, y, chunkInd, darkness = 0):
         super().__init__(app, x, y, Blocks.STONE, chunkInd, darkness = darkness,
-                         color="seashell4",
                          mineLevel=1)
 
 class Andesite(Block):
     def __init__(self, app, x, y, chunkInd, darkness = 0):
         super().__init__(app, x, y, Blocks.ANDESITE, chunkInd,
-                         darkness = darkness, color="seashell3",
+                         darkness = darkness,
                          mineLevel=2)
 
 class Diorite(Block):
     def __init__(self, app, x, y, chunkInd, darkness = 0):
-        super().__init__(app, x, y, Blocks.DIORITE, chunkInd, darkness = darkness, color="seashell2",
+        super().__init__(app, x, y, Blocks.DIORITE, chunkInd, darkness = darkness,
                          mineLevel=2)
 
 class IRON_ORE(Block):
     def __init__(self, app, x, y, chunkInd, darkness = 0):
-        super().__init__(app, x, y, Blocks.IRON_ORE, chunkInd, darkness = darkness, color="seashell1",
+        super().__init__(app, x, y, Blocks.IRON_ORE, chunkInd, darkness = darkness,
                          mineLevel=3)
 
 class Bedrock(Block):
     def __init__(self, app, x, y, chunkInd, darkness = 0):
-        super().__init__(app, x, y, Blocks.BEDROCK, chunkInd, darkness = darkness, solid=1, breakable=False,
-                         color="dark slate gray")
+        super().__init__(app, x, y, Blocks.BEDROCK, chunkInd, darkness = darkness, solid=1, breakable=False)
 
 class Tree(Block):
     def __init__(self, app, x, y, chunkInd, darkness = 0):
-        super().__init__(app, x, y, Blocks.TREE, chunkInd,darkness = darkness, color="LightSalmon4", solid = False)
+        super().__init__(app, x, y, Blocks.TREE, chunkInd,darkness = darkness, solid = False)
 
 class Log(Block):
     def __init__(self, app, x, y, chunkInd, darkness = 0):
         super().__init__(app, x, y, Blocks.LOG, chunkInd,
-                         darkness = darkness, color="LightSalmon4")
+                         darkness = darkness)
 
 class Planks(Block):
     def __init__(self, app, x, y, chunkInd, darkness = 0):
-        super().__init__(app, x, y, Blocks.PLANKS, chunkInd, darkness = darkness, color="LightSalmon3")
+        super().__init__(app, x, y, Blocks.PLANKS, chunkInd, darkness = darkness)
 
 class Platform(Block):
     def __init__(self, app, x, y, chunkInd, darkness = 0):
-        super().__init__(app, x, y, Blocks.PLATFORM, chunkInd, darkness = darkness, solid = 0.5,  color="LightSalmon3")
+        super().__init__(app, x, y, Blocks.PLATFORM, chunkInd, darkness = darkness, solid = 0.5)
         self.unSolidTimer = 0
         self.isHalf = True
 
@@ -159,5 +155,4 @@ class Platform(Block):
 
 class Wall(Block):
     def __init__(self, app, x, y, chunkInd, darkness = 0):
-        super().__init__(app, x, y, Blocks.WALL, chunkInd, darkness = darkness, solid=0,
-                         color="#A6670E")
+        super().__init__(app, x, y, Blocks.WALL, chunkInd, darkness = darkness, solid=0)

@@ -128,22 +128,22 @@ def drawPlayer(app, screen: pygame.Surface):
     screen.blit(app.player.getSprite(), (x + 0.2, y + 4))
 
 def drawDebug(app, screen: pygame.Surface):
-    gameTime = app.font.render(f"G: {app.game.time}", 1, "#9A9A9A")
+    gameTime = app.font.render(f"G: {app.game.time}", 1, "#2D1E1E")
     pos = gameTime.get_rect()
     pos.left, pos.centery = (5, 15)
     screen.blit(gameTime, pos)
 
-    tps = app.font.render(f'TPS: {round(1 / (time() - app.lastTime), 3)}', 1, "#9A9A9A")
+    tps = app.font.render(f'TPS: {round(app.clock.get_fps())}', 1, "#2D1E1E")
     pos = tps.get_rect()
     pos.left, pos.centery = (5, 35)
     screen.blit(tps, pos)
     
-    player = app.font.render(f"Player: {app.player.x}, {app.player.y}", 1, "#9A9A9A")
+    player = app.font.render(f"Player: {app.player.x}, {app.player.y}", 1, "#2D1E1E")
     pos = player.get_rect()
     pos.left, pos.centery = (5, 55)
     screen.blit(player, pos)
 
-    mouse = app.font.render(f'M: ({app.func.mouseX}, {app.func.mouseY})', 1, "#9A9A9A")
+    mouse = app.font.render(f'M: ({app.func.mouseX}, {app.func.mouseY})', 1, "#2D1E1E")
     pos = mouse.get_rect()
     pos.left, pos.centery = (5, 75)
     screen.blit(mouse, pos)
@@ -151,10 +151,19 @@ def drawDebug(app, screen: pygame.Surface):
     if app.func.hovering:
         block = app.func.hovering
         if block:
-            blockText = app.font.render(f'B: ({block.x}, {block.y}) {block.type.name} {block.chunkInd}', 1, "#9A9A9A")
+            blockText = app.font.render(f'B: {block.type.name}', 1, "#2D1E1E")
             pos = blockText.get_rect()
             pos.left, pos.centery = (5, 95)
             screen.blit(blockText, pos)
+            i = 0
+            for key, val in block.__dict__.items():
+                if (key == "type" or key.startswith("_")
+                    or key == "rect" or "mage" in key): continue
+                text = app.font.render(f'{key}: {val}', 1, "#2D1E1E")
+                pos = text.get_rect()
+                pos.left, pos.centery = (5, 115 + i * 15)
+                i += 1
+                screen.blit(text, pos)
 
 def drawHotbar(app, screen: pygame.Surface):
     width = 9 * 28 + 40
@@ -324,6 +333,7 @@ def main():
     pygame.key.set_repeat(150, 30)
     
     app = App()
+    app.clock = pygame.time.Clock()
     
     pygame.time.set_timer(pygame.USEREVENT + 1, 20)
     pygame.mouse.set_cursor(pygame.cursors.tri_left)
@@ -350,6 +360,7 @@ def main():
                 timerFired(app)
         redrawAll(app, screen)
         pygame.display.flip()
+        app.clock.tick(60)
     
 if __name__ == "__main__":
     main()

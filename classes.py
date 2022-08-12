@@ -37,7 +37,7 @@ class Chunk:
             row_ground_level = height
             row_grass_level = height - GRASS_LEVEL - random.randint(0, 2)
             row_dirt_level = height - DIRT_LEVEL - random.randint(-1, 1)
-            for r in range(row_ground_level + 1, -1, -1):
+            for r in range(row_ground_level, -1, -1):
                 if r >= row_ground_level: # 24
                     block = Air(app, x+i, r, chunkI, darkness = height - r - 2)
                 elif r >= row_grass_level: # 9
@@ -92,35 +92,35 @@ class Chunk:
                     if x <= self.x:
                         leftChunk = app.game.getChunk(app, self.index - 1)
                         if (x, y) not in leftChunk.blocks:
-                            leftChunk.blocks[(x, y)] = Air(app, x, y,
-                                                        self.index - 1)
+                            leftChunk.blocks[(x, y)] = Air(app, x, y, self.index - 1)
                     elif x >= self.x + CHUNK_SIZE:
                         rightChunk = app.game.getChunk(app, self.index + 1)
                         if (x, y) not in rightChunk.blocks:
-                            rightChunk.blocks[(x, y)] = Air(app, x, y,
-                                                        self.index + 1)
+                            rightChunk.blocks[(x, y)] = Air(app, x, y, self.index + 1)
                 elif ((x, y) not in self.blocks):
-                    self.blocks[(x, y)] = Air(app, x, y,
-                                                        self.index)
+                    self.blocks[(x, y)] = Air(app, x, y, self.index)
     
     def ungenerateAir(self, app, block: Block):
         for x in range(block.x - 1, block.x + 2):
             for y in range(block.y - 1, block.y + 2):
-                nearbySolids = len(nearbySolid(app, x, y))
+                nearbySolids = nearbySolid(app, x, y)
                 if not self.inChunk(x):
                     if x <= self.x:
                         leftChunk = app.game.getChunk(app, self.index - 1)
-                        if (x, y) in leftChunk.blocks and leftChunk.blocks[(x, y)].type == Blocks.AIR and nearbySolids == 0:
-                            app.game.blocks.remove(leftChunk.blocks[(x, y)])
-                            del leftChunk.blocks[(x, y)]
+                        if (x, y) in leftChunk.blocks and leftChunk.blocks[(x, y)].type == Blocks.AIR:
+                            if len(nearbySolids) == 0:
+                                app.game.blocks.remove(leftChunk.blocks[(x, y)])
+                                del leftChunk.blocks[(x, y)]
                     elif x >= self.x + CHUNK_SIZE:
                         rightChunk = app.game.getChunk(app, self.index + 1)
-                        if (x, y) in rightChunk.blocks and rightChunk.blocks[(x, y)].type == Blocks.AIR and nearbySolids == 0:
-                            app.game.blocks.remove(rightChunk.blocks[(x, y)])
-                            del rightChunk.blocks[(x, y)]
-                elif ((x, y) in self.blocks and self.blocks[(x, y)].type == Blocks.AIR) and nearbySolids == 0:
-                    app.game.blocks.remove(self.blocks[(x, y)])
-                    del self.blocks[(x, y)]
+                        if (x, y) in rightChunk.blocks and rightChunk.blocks[(x, y)].type == Blocks.AIR:
+                            if len(nearbySolids) == 0:
+                                app.game.blocks.remove(rightChunk.blocks[(x, y)])
+                                del rightChunk.blocks[(x, y)]
+                elif ((x, y) in self.blocks and self.blocks[(x, y)].type == Blocks.AIR):
+                    if len(nearbySolids) == 0:
+                        app.game.blocks.remove(self.blocks[(x, y)])
+                        del self.blocks[(x, y)]
     
     def update(self, app):
         for item in self.items:
