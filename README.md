@@ -8,88 +8,25 @@ A clone of Terraria written in Python with Tkinter and CMU_112_Graphics.
 
 [DEMO VIDEO FOR TP3](https://drive.google.com/file/d/1tRAe3TX2sbNZg5mA4x9Xwen2_DBVjCGF/view?usp=sharing)
 
-### Project Description
+## How To Run
 
-A clone of Terraria that has a different UI and some different aspects of gameplay.
+- Install pygame
 
-### Structural Plan
+- Run the terraria.py file
 
-Classes:
+- Press 'k' when you spawn in to view the keybinds
 
-- Game (Coordinate System, helper functions, manages chunks)
-- Chunk (Chunk of terrain)
-- Functionality (Game states, event handlers, etc)
-- Entity (Collision detection, movement, gravity, etc)
-  - Player
-  - Mushroom
-  - Slime
-  - Item (Item that can be picked up)
-- InventoryItem (Item within player inventory)
-  - Carrot
-  - Bread
-  - Apple
-- Block (Manages one instance of a block)
+## How To Play
 
-Separated into `blocks.py`, `classes.py`, `helpers.py`, `items.py`, `terraria.py`, along with `settings.py` and `colors.py` for configuration.
-
-### Algorithmic Plan
-
-- Terrain Generation (Midpoint generation)
-- Cave generation (My own design)
-- Mob AI (Aggro and wandering)
-
-### Timeline Plan
-
-- TP 2: More items and blocks, reliable mob AI
-- TP 3: Better image performance, use actual block sprites
-
-## TP2 Updates
-
-### Technical Updates
-
-- Moved over to Pygame
-- Rewrote graphics systems and set up Sprite classes
-- Rewrote event handlers and game states
-- Using block sprites and images
-
-### Changes to Design
-
-None, other than using images instead of solid colors for blocks.
-
-### TP3 Updates
-
-### Technical Updates
-
-- Game now has lighting, so player can't see blocks that they haven't been within 4 blocks of yet
-- Added Andesite and Diorite, which are automatically generated as patches in the ground
-- Placed trees in the background, so the player can move through them but still be able to break them
-- Added tools to the game, such as Wooden Pickaxe, Sword, and Stone Pickaxe, Sword.
-- Used tools to restrict which blocks the player can break
-- Sword does more damage than using bare hand
-- Tools change how quickly you can break a block
-
-### Changes to Design
-
-None, other than lighting
-
-### Version Control Plan
-
-![git](./github.png)
-
-### Citations
-
-[Terrain Gen](https://learn.64bitdragon.com/articles/computer-science/procedural-generation/the-diamond-square-algorithm)
-
-[Textures](https://resourcepack.net/dandelion-resource-pack/)
-
-[Mob Textures](https://pixelfrog-assets.itch.io/pixel-adventure-2)
-
-[Background Image](https://www.deviantart.com/jonata-d/art/Mountain-Sprite-001-706211298)
-
-[Pygame Help](https://kidscancode.org/blog/2016/08/pygame_1-2_working-with-sprites/)
-
-[Pygame Help](https://www.geeksforgeeks.org/pygame-creating-sprites/)
-
-[Pygame Docs](https://www.pygame.org/docs/)
-
-[Pygame Colors](https://riptutorial.com/pygame/example/23788/transparency)
+- Find a tree and mine it
+- Craft a wooden pickaxe
+- Make a house (optional)
+- Mine down to stone level, and mine some stone
+- Craft a stone pickaxe and a stone sword
+- Mine down more to find iron ore, and mine it
+- Craft the iron ore into raw iron
+- Craft the raw iron and some planks into an iron pickaxe and an iron sword
+- Strip mine to find a Bird Spawn block
+- Break the Bird Spawn and go back to the surface (Platforms are useful!)
+- Craft the Bird Spawn into a Bird Egg and click anywhere to spawn it
+- Make sure you have the sword out, and run away from the bird when it's falling down!

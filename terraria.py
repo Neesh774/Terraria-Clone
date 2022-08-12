@@ -84,6 +84,11 @@ def mousePressed(app, event):
             curInv.count -= 1
             if curInv.count == 0:
                 app.player.inventory[app.func.selectedInventory] = None
+        elif hasattr(curInv, "use") and curInv.use:
+            curInv.use(app)
+            curInv.count -= 1
+            if curInv.count == 0:
+                app.player.inventory[app.func.selectedInventory] = None
         else:
             playerX = getPixX(app, app.player.x)
             right = event[0] > playerX
@@ -174,20 +179,30 @@ def drawHotbar(app, screen: pygame.Surface):
         x = 8 + (i * (itemWidth + 4))
         selected = app.func.selectedInventory == i
         left = app.width - width - 12 + x
-        pygame.draw.rect(screen, "#965816", (left, 16,
-                                itemWidth, itemWidth), 0)
+        slot = pygame.Surface((itemWidth, itemWidth))
+        slot.fill("#965816")
         if selected:
-            pygame.draw.rect(screen, "#B4B4B4", (left, 16,
-                                itemWidth, itemWidth), 2)
+            pygame.draw.rect(slot, "#B4B4B4", (0, 0, itemWidth, itemWidth), 2)
         if item:
             image = pygame.transform.scale(getImage(app, item.name), (itemWidth - 8, itemWidth - 8))
-            screen.blit(image, (left + 5, 20))
+            slot.blit(image, (4, 4))
             
             if item.count > 1:
                 count = app.smallFont.render(f"{item.count}", 1, "#38332F")
                 pos = count.get_rect()
-                pos.left, pos.centery = (left + 2, itemWidth - 4)
-                screen.blit(count, pos)
+                pos.left, pos.centery = (2, 4)
+                slot.blit(count, pos)
+        
+            if hasattr(item, "curCooldown") and item.attackCooldown != 0:
+                start = 0
+                percent = item.curCooldown / item.attackCooldown
+                end = percent * 2 * math.pi
+                cooldown = pygame.Surface((itemWidth + 8, itemWidth + 8), pygame.SRCALPHA)
+                pygame.draw.arc(cooldown, (0, 0, 0, 200), (0, 0, itemWidth + 8, itemWidth + 8), start, end, itemWidth)
+                cooldown.set_alpha(200)
+                slot.blit(cooldown, (-4, -4))
+            
+        screen.blit(slot, (left, 16))
 
     for h in range(0, 10):
         x = app.width - (h + 1) * (18 + 4)
@@ -311,7 +326,7 @@ def timerFired(app):
 
         randomChance = random.randint(0, 50)
         if randomChance == 0:
-            app.game.spawnMob(app)
+            app.game.spawnRandomMob(app)
         """
         FUNC
         """

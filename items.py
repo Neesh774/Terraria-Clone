@@ -1,19 +1,32 @@
+from pprint import pprint
 from helpers import *
+import inspect
 
 class InventoryItem():
-    def __init__(self, name: str, count = 1, canPlace = False, stackMax = STACK_MAX, displayName = None):
+    def __init__(self, name: str, count = 1, canPlace = False,
+                 stackMax = STACK_MAX, displayName = None, canUse = False, **kwargs):
         self.name = name
         self.count = count
         self.canPlace = canPlace
         self.stackMax = stackMax
+        self.canUse = canUse
         if not displayName:
             self.displayName = name
         else:
             self.displayName = displayName
+        
+        for key, value in kwargs.items():
+            setattr(self, key, value)
 
     def toItem(self, app, chunk, x, y, canPickUp=True, dx=0, dy=0, count=1):
-        return Item(app, self.name, x, y, chunk, count=(count if count else self.count), canPlace=self.canPlace, canPickUp=canPickUp,
-                    dx=dx, dy=dy)
+        args = {}
+        for key, val in self.__dict__.items():
+                if (key == "type" or key.startswith("_")
+                    or key == "rect" or "count" == key or
+                    key == "x" or key == "y" or key == "dx" or
+                    key == "dy" or key == "chunk" or key == "canPickUp"): continue
+                args[key] = val
+        return Item(app, x = x, y = y, dx = dx, dy = dy, chunk = chunk, canPickUp=canPickUp, count=(count if count else self.count), **args)
     
     def addToCount(self, count):
         self.count += count
@@ -48,11 +61,11 @@ class Apple(InventoryItem):
         self.foodValue = 2
         
 class WoodenSword(InventoryItem):
-     def __init__(self, count = 1, *args, **kwargs):
-         self.attackDamage = 2
-         self.attackCooldown = 20
-         self.curCooldown = 0
-         super().__init__("wood_sword", count = count, stackMax = 1, displayName="Wood Sword")
+    def __init__(self, count = 1, *args, **kwargs):
+        self.attackDamage = 2
+        self.attackCooldown = 20
+        self.curCooldown = 0
+        super().__init__("wood_sword", count = count, stackMax = 1, displayName="Wood Sword")
 
 class WoodenPickaxe(InventoryItem):
     def __init__(self, count = 1, *args, **kwargs):
@@ -114,9 +127,16 @@ class GodItem(InventoryItem):
         self.mineSpeed = 10
         super().__init__("gold_hoe", count = count, stackMax = 1, displayName="God Item")
 
+class BirdEgg(InventoryItem):
+    def __init__(self, count = 1, *args, **kwargs):
+        super().__init__("egg", count = count, stackMax = 1, displayName="Fat Bird Egg")
+    
+    def use(self, app):
+        app.game.spawnMob(app, "fat_bird")
+
 class Item(Entity):
     def __init__(self, app, name: str, x, y, chunk,  count = 1, canPlace = False,
-                 canPickUp = True, dx = 0, dy = 0, inventoryClass=InventoryItem):
+                 canPickUp = True, dx = 0, dy = 0, inventoryClass=InventoryItem, **kwargs):
         super().__init__(x, y, dx=dx, dy=dy)
         self.name = name
         self.count = count
@@ -134,13 +154,17 @@ class Item(Entity):
         else:
             self.canPickUp = 0
         self.inventoryClass = inventoryClass
+        for key, val in kwargs.items():
+            setattr(self, key, val)
 
     def __str__(self):
         return f'{self.name}: {self.count} ({self.x}, {self.y})'
 
     def toInventory(self):
-        return self.inventoryClass(name=self.name, count=self.count,
-                                canPlace=self.canPlace)
+        args = {}
+        for key, val in self.__dict__.items():
+            args[key] = val
+        return self.inventoryClass(**args)
     
     def tick(self, app, chunk):
         dist = math.dist((app.player.x, app.player.y), (self.x, self.y))

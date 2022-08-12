@@ -6,7 +6,6 @@ from enum import Enum
 import random
 from settings import *
 from assets.colors import colors
-import numpy as np
 
 from pygame.key import *
 from pygame.locals import *
@@ -27,12 +26,14 @@ class Blocks(Enum):
     WALL = 9
     TREE = 10
     IRON_ORE = 11
+    BIRD_SPAWN = 12
     
 class TerrainPoints(Enum):
     CAVE = 0
     ANDESITE = 1
     DIORITE = 2
     IRON = 3
+    BIRD_SPAWN = 4
     
 class Entity(pygame.sprite.Sprite):
     def __init__(self, x, y, dx = 0, dy = 0):
@@ -44,6 +45,7 @@ class Entity(pygame.sprite.Sprite):
         self.gravityVal = 0.05
         self.suffocationDamage = False
         self.suffocationDelay = -1
+        self.haveCollisions = True
 
     def update(self, app, *args):
         self.y -= self.dy
@@ -67,6 +69,7 @@ class Entity(pygame.sprite.Sprite):
         self.dy += self.gravityVal
 
     def checkForCollision(self, app):
+        if not self.haveCollisions: return
         blockLeft = getBlockFromCoords(app, math.floor(self.x) - 1, math.ceil(self.y))
         blockRight = getBlockFromCoords(app, math.ceil(self.x), math.ceil(self.y))
         blockTopLeft = getBlockFromCoords(app, math.floor(self.x), math.floor(self.y + 1))
@@ -337,19 +340,6 @@ def numCanCraft(app, recipe):
         maxCount += items[name] // count
     return maxCount
 
-def getColors(image):
-    im  = np.array(image)
-
-    colors = []
-
-    for x in range(im.shape[1]):
-        row = []
-        for y in range(im.shape[0]):
-            row.append(tuple(im[y, x]))
-        colors.append(row)
-    
-    return colors
-
 def nearbySolid(app, x, y):
     solid = []
     block = getBlockFromCoords(app, x - 1, y)
@@ -406,3 +396,6 @@ def getPath(app, x1, y1, x2, y2, depth = 0, path = [], maxDepth = 5):
 def keyIsNumber(k):
     nums = [pygame.K_0, pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4, pygame.K_5, pygame.K_6, pygame.K_7, pygame.K_8, pygame.K_9]
     return k in nums
+
+def giveItem(app, item):
+    app.player.pickUp(app, item)

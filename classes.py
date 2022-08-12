@@ -77,7 +77,9 @@ class Chunk:
                         elif pointType == TerrainPoints.DIORITE:
                             self.blocks[(i, j)] = Diorite(app, i, j, chunkI, darkness = 4)
                         elif pointType == TerrainPoints.IRON:
-                            self.blocks[(i, j)] = IRON_ORE(app, i, j, chunkI, darkness = 4)
+                            self.blocks[(i, j)] = IronOre(app, i, j, chunkI, darkness = 4)
+                        elif pointType == TerrainPoints.BIRD_SPAWN:
+                            self.blocks[(i, j)] = BirdSpawn(app, i, j, chunkI, darkness = 4)
     
     def getRange(self, app):
         return self.x, self.x + CHUNK_SIZE
@@ -149,23 +151,31 @@ class Chunk:
     def generatePoints(self, app):
         # Generate terrain points to be used for caves or stone generation
         for i in range(random.randint(0, 10)):
-            typeRand = random.randint(0, 4)
-            if typeRand == 0:
+            typeRand = random.randint(0, 5)
+            if typeRand < 2:
                 pointType = TerrainPoints.CAVE
                 radius = random.randint(2, 6)
                 y = random.randint(0, GROUND_LEVEL - GRASS_LEVEL - 5)
-            elif typeRand < 3:
+            elif typeRand == 2:
                 pointType = TerrainPoints.ANDESITE
                 radius = random.randint(3, 4)
                 y = random.randint(0, GROUND_LEVEL - DIRT_LEVEL - 6)
-            elif typeRand < 4:
+            elif typeRand == 3:
                 pointType = TerrainPoints.DIORITE
                 radius = random.randint(1, 3)
                 y = random.randint(0, GROUND_LEVEL - DIRT_LEVEL - 10)
-            elif typeRand <= 4:
+            elif typeRand == 4:
                 pointType = TerrainPoints.IRON
                 radius = random.randint(1, 2)
                 y = random.randint(0, GROUND_LEVEL - GRASS_LEVEL - 10)
+            elif typeRand == 5:
+                willSpawnBirdSpawn = random.randint(0, 10)
+                if willSpawnBirdSpawn == 10:
+                    pointType = TerrainPoints.BIRD_SPAWN
+                    radius = 1
+                    y = random.randint(0, 10)
+                else:
+                    continue
             point = (random.randint(self.x, self.x + CHUNK_SIZE), y)
             self.points.append({
                 "coords": point,
@@ -256,7 +266,7 @@ class Game:
             app.player.inventory[app.func.selectedInventory] = item
             return True
     
-    def spawnMob(self, app):
+    def spawnRandomMob(self, app):
         # loop through blocks within PLAYER_MOB_SPAWN_RADIUS of player
         left_side = int(app.player.x - PLAYER_MOB_SPAWN_RADIUS)
         right_side = int(app.player.x + PLAYER_MOB_SPAWN_RADIUS)
@@ -288,6 +298,16 @@ class Game:
             return
         self.getChunk(app, block.chunkInd).mobs.add(mob)
         return mob
+
+    def spawnMob(self, app, mobName):
+        if mobName == "slime":
+            mob = Slime(app, app.player.x, app.player.y)
+        elif mobName == "mushroom":
+            mob = Mushroom(app, app.player.x, app.player.y)
+        elif mobName == "fat_bird":
+            mob = FatBird(app, app.player.x, app.player.y)
+        chunk = self.getChunk(app, app.player.chunk)
+        chunk.mobs.add(mob)
 
 class Player(Entity):
     def __init__(self, app):
@@ -390,6 +410,12 @@ class Player(Entity):
             parallax = 1 if self.dx < 0 else -1
             app.game.bgX = [app.game.bgX[bg] + parallax for bg in range(len(app.game.bgX))]
         
+        for item in self.inventory:
+            if item and hasattr(item, "curCooldown"):
+                item.curCooldown -= 1
+                if item.curCooldown <= 0:
+                    item.curCooldown = 0
+        
         if self.orient == -1:
             self.image = pygame.transform.flip(self.originalImage, True, False)
         else:
@@ -467,17 +493,27 @@ class Player(Entity):
         rightChunk = app.game.getChunk(app, self.chunk + 1)
         mobs = curChunk.mobs.sprites() + rightChunk.mobs.sprites()
         damage = self.getAttackDamage(app)
+        curInv = self.inventory[app.func.selectedInventory]
+        if curInv and hasattr(curInv, "curCooldown"):
+            tool = curInv
+        else:
+            tool = None
         for mob in mobs:
             if isRight:
                 withinXRange = mob.x > self.x and mob.x < self.x + 2
                 withinYRange = mob.y >= self.y and mob.y <= self.y + 1
                 if withinXRange and withinYRange:
                     mob.takeDamage(app, damage)
+                    if tool:
+                        tool.curCooldown = tool.attackCooldown
             else:
                 withinXRange = mob.x < self.x and mob.x > self.x - 2
                 withinYRange = mob.y >= self.y and mob.y <= self.y + 1
                 if withinXRange and withinYRange:
                     mob.takeDamage(app, damage)
+                    if tool:
+                        tool.curCooldown = tool.attackCooldown
+
     def eat(self, food):
         self.health += food.foodValue
         if self.health > 10:
@@ -491,14 +527,14 @@ class Player(Entity):
         self.canCraft = canCraft
     
     def getAttackDamage(self, app):
-         curInv = self.inventory[app.func.selectedInventory]
-         if not curInv or not hasattr(curInv, "attackDamage"):
-             return 1
-         else:
-             if curInv.curCooldown > 0:
-                 return 1
-             else:
-                 return curInv.attackDamage
+        curInv = self.inventory[app.func.selectedInventory]
+        if not curInv or not hasattr(curInv, "attackDamage"):
+            return 1
+        else:
+            if curInv.curCooldown > 0:
+                return 1
+            else:
+                return curInv.attackDamage
     
     def getMineLevel(self, app):
         curInv = self.inventory[app.func.selectedInventory]
@@ -552,7 +588,7 @@ class Functionality:
         self.mouseY = 0
         self.hovering = None
         self.hoveringRect = None
-        self.debug = True
+        self.debug = False
         self.selectedInventory = 0
         self.canInteract = False
         self.holding = None
@@ -620,9 +656,6 @@ class Functionality:
                         self.craftingSelected = len(app.player.canCraft) - 1
                     if self.craftingSelected < 0:
                         self.craftingSelected = 0
-        
-        if key == K_EQUALS and self.debug:
-            print(eval(input(">> ")))
         """
         PLAYER
         """

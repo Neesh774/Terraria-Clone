@@ -13,17 +13,19 @@ class Enemy(Entity):
         self.damage = 0.5
         self.damageCooldown = 0
         
+        self.regularAttack = True # different attacks for bosses
+        
         self.darkness = 0
     
     def tick(self, app):
         # check if player is in range
         dist = math.dist((self.x, self.y), (app.player.x, app.player.y))
 
-        if dist < self.attackRange and self.damageCooldown == 0: # within attack range
+        if dist < self.attackRange and self.damageCooldown == 0 and self.regularAttack: # within attack range
             self.attack(app)
-        elif dist < self.viewRange and dist > 1: # move towards player
+        elif dist < self.viewRange and dist > 1 and self.regularAttack: # move towards player
             self.move(0.01, app.player.x < self.x)
-        else: # random movement
+        elif self.regularAttack: # random movement
             randomWillMove = random.randint(0, 50)
             if randomWillMove == 0:
                 randomDir = random.randint(0, 1)
@@ -65,10 +67,18 @@ class Enemy(Entity):
         else:
             self.moveRight(amount)
 
-    def attack(self, app):
+    def attack(self, app, damage = None, attackRange = None):
+        if not damage:
+            damage = self.damage
+        if not attackRange:
+            attackRange = self.attackRange
+        if math.dist((self.x, self.y), (app.player.x, app.player.y)) > attackRange:
+            return
         if app.player.spawnInvincibility > 0:
             return
-        app.player.health -= self.damage
+        if self.damageCooldown > 0:
+            return
+        app.player.health -= damage
         if self.x < app.player.x:
             app.player.dy -= 0.2
             app.player.dx += 0.2
@@ -205,4 +215,150 @@ class Slime(Enemy):
         chunk = app.game.getChunk(app, app.game.getChunkIndex(self.x))
         chunk.mobs.remove(self)
         drop = Item(app, "carrot", self.x, self.y, chunk, random.randint(1, 3), dy=-0.5, inventoryClass=Carrot)
+        chunk.items.add(drop)
+
+class FatBird(Enemy):
+    def __init__(self, app, x, y):
+        super().__init__(x, y)
+        self.health = 40
+        self.viewRange = 40
+        self.attackRange = 1
+        self.dropAttackRange = 4
+        self.damage = 8
+        self.idle = []
+        self.width = 40
+        self.height = 48
+        self.gravityVal = 0
+        
+        self.spriteDelay = 5
+
+        idleSprites = app.images["bird-idle"]
+        for i in range(8):
+            cropped = pygame.Surface((40, 48))
+            cropped.blit(idleSprites, (0, 0), (i * 40, 0, (i + 1) * 40, 48))
+            cropped.set_alpha(255)
+            self.idle.append(cropped)
+
+        self.isHurt = -1
+        self.hurt = []
+        hurtSprites = app.images["bird-hit"]
+        for i in range(5):
+            cropped = pygame.Surface((40, 48))
+            cropped.blit(hurtSprites, (0, 0), (i * 40, 0, (i + 1) * 40, 48))
+            cropped.set_alpha(255)
+            self.hurt.append(cropped)
+        
+        self.fallingSprites = app.images["bird-fall"]
+        self.falling = []
+        for i in range(4):
+            cropped = pygame.Surface((40, 48))
+            cropped.blit(self.fallingSprites, (0, 0), (i * 40, 0, (i + 1) * 40, 48))
+            cropped.set_alpha(255)
+            self.falling.append(cropped)
+    
+        self.groundSprites = app.images["bird-ground"]
+        self.ground = []
+        self.onGround = False
+        for i in range(4):
+            cropped = pygame.Surface((40, 48))
+            cropped.blit(self.groundSprites, (0, 0), (i * 40, 0, (i + 1) * 40, 48))
+            cropped.set_alpha(255)
+            self.ground.append(cropped)
+        
+        self.spriteIndex = 0
+        self.image = self.idle[self.spriteIndex]
+        self.rect = self.image.get_rect()
+        self.rect.center = (-self.width, -self.height)
+        
+        self.lastAttack = 0 # how much time since the last attack
+        self.rising = False # rising up to the air
+        self.regularAttack = False
+        self.willAttack = 0 # pausing in the air about to fall
+        self.canAttack = 0 # if it can lock onto the player and start falling
+        self.isFalling = False # falling
+    
+        self.damageCooldown = 10
+    
+    def mobUpdate(self, app):
+        
+        if self.rising:
+            if self.rect.top > 80: # rise
+                self.y += 0.5
+            elif 1 < abs(self.x - app.player.x) < self.viewRange: # move above player
+                self.x += 0.2 if self.rect.centerx < app.player.rect.centerx else -0.2
+            elif self.canAttack: # attack
+                self.rising = False
+                self.willAttack = 50
+                self.spriteIndex = 0
+        
+        if self.lastAttack > 0:
+            self.lastAttack -= 1
+        else:
+            self.lastAttack = 200
+            self.rising = True
+            self.dy = 0
+            self.isFalling = False
+            self.canAttack = 50
+        
+        if self.canAttack > 0:
+            self.canAttack -= 1
+        
+        if self.isFalling and abs(self.y - app.player.y) < self.dropAttackRange:
+            self.attack(app, attackRange = self.dropAttackRange)
+            self.isFalling = False
+        elif self.isFalling:
+            self.dy += 0.2
+        
+        if self.willAttack > 0:
+            self.willAttack -= 1
+            if self.willAttack == 0:
+                self.isFalling = True
+        
+        if abs(self.y - app.player.y) < self.attackRange and abs(self.x - app.player.x) < self.attackRange:
+            self.attack(app, 3)
+        
+        if self.lastAttack > 0 and not self.rising and not self.isFalling and not self.willAttack:
+            self.onGround = True
+        
+        if self.spriteDelay == 0:
+            self.spriteDelay = 5
+            if self.isHurt >= 0:
+                self.isHurt += 1
+                if self.isHurt == 4:
+                    self.isHurt = -1
+                self.spriteIndex = self.isHurt
+                self.image = self.hurt[self.spriteIndex]
+            elif self.isFalling:
+                self.spriteIndex = (self.spriteIndex + 1) % len(self.falling)
+                self.image = self.falling[self.spriteIndex]
+                # state = pygame.Surface((self.width, self.height))
+                # state.fill((0, 255, 0))
+                # state.set_alpha(255)
+                # self.image.blit(state, (0, 0), (0, 0, self.width, self.height))
+            # elif self.rising:
+            #     state = pygame.Surface((self.width, self.height))
+            #     state.fill((0, 0, 255))
+            #     state.set_alpha(255)
+            #     self.image.blit(state, (0, 0), (0, 0, self.width, self.height))
+            elif self.onGround:
+                self.spriteIndex = (self.spriteIndex + 1)
+                if self.spriteIndex == len(self.ground):
+                    self.onGround = False
+                    self.spriteIndex = 0
+                else:
+                    self.image = self.ground[self.spriteIndex]
+            else:
+                self.spriteIndex = (self.spriteIndex + 1) % len(self.idle)
+                self.image = self.idle[self.spriteIndex]
+                # state = pygame.Surface((self.width, self.height))
+                # state.fill((255, 0, 0))
+                # state.set_alpha(255)
+                # self.image.blit(state, (0, 0), (0, 0, self.width, self.height))
+        else:
+            self.spriteDelay -= 1
+    
+    def die(self, app):
+        chunk = app.game.getChunk(app, app.game.getChunkIndex(self.x))
+        chunk.mobs.remove(self)
+        drop = Item(app, "gold_hoe", self.x, self.y, chunk, random.randint(1, 3), dy=-0.5, inventoryClass=GodItem)
         chunk.items.add(drop)

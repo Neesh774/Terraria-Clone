@@ -65,5 +65,11 @@ recipes = [
             "PLANKS": 2
         },
         "output": IronSword(1)
+    },
+    {
+        "ingredients": {
+            "BIRD_SPAWN": 1
+        },
+        "output": BirdEgg(1)
     }
 ]

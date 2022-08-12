@@ -107,9 +107,14 @@ class Diorite(Block):
         super().__init__(app, x, y, Blocks.DIORITE, chunkInd, darkness = darkness,
                          mineLevel=2)
 
-class IRON_ORE(Block):
+class IronOre(Block):
     def __init__(self, app, x, y, chunkInd, darkness = 0):
         super().__init__(app, x, y, Blocks.IRON_ORE, chunkInd, darkness = darkness,
+                         mineLevel=3)
+
+class BirdSpawn(Block):
+    def __init__(self, app, x, y, chunkInd, darkness = 0):
+        super().__init__(app, x, y, Blocks.BIRD_SPAWN, chunkInd, darkness = darkness,
                          mineLevel=3)
 
 class Bedrock(Block):
