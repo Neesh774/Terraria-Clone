@@ -17,6 +17,8 @@ def appStarted(app):
     ASSETS_DIR = "assets"
     app.width = 500
     app.height = 500
+    import settings
+    settings.UNIT_WH = app.width / (CHUNK_SIZE * 3.5)
     app.images = {}
 
     app.background = pygame.image.load(os.path.join(ASSETS_DIR, 'background.png'))
@@ -109,7 +111,8 @@ def drawChunk(app, screen: pygame.Surface, chunk: Chunk):
 def drawGame(app, screen: pygame.Surface):
     pygame.draw.rect(screen, getBackgroundColor(app.game.time), (0, 0, app.width, app.height), 0)
 
-    screen.blit(app.background, (0, 0))
+    for bgX in app.game.bgX:
+        screen.blit(app.background, (bgX, 0))
     
     pygame.draw.rect(screen, "#050505", (0, getPixY(app, GROUND_LEVEL - GRASS_LEVEL - TERRAIN_VARIATION),
                             app.width, app.height * 2), 0)
@@ -190,20 +193,20 @@ def drawHotbar(app, screen: pygame.Surface):
     
 def drawSettings(app, screen):
     left = app.width * 0.1
-    top = app.height * 0.1
+    top = app.height * 0.05
     width = app.width * 0.8
-    height = app.height * 0.8
+    height = app.height * 0.9
     pygame.draw.rect(screen, "#C79355", (left, top, width, height), 0)
     for i, (action, keybind) in enumerate(KEYBINDS.items()):
-        cell_height = (height * 0.1) + 2
+        cell_height = (height * 0.09) + 2
         row = i * cell_height
         leftCentX = app.width * 0.23
-        leftCentY = row + top + (cell_height - 8) / 2
+        leftCentY = row + top + (cell_height) / 2
 
         actionText = app.font.render(action, 1, "#38332F")
         screen.blit(actionText, (leftCentX, leftCentY))
 
-        box = pygame.draw.rect(screen, "#9D7039", (app.width * 0.52, row + top + 20, width * 0.26, cell_height - 20), 0)
+        box = pygame.draw.rect(screen, "#9D7039", (app.width * 0.52, row + top + 25, width * 0.26, cell_height - 25), 0)
         keybindText = app.font.render(keybind, 1, "#38332F")
         pos = keybindText.get_rect()
         pos.centerx, pos.centery = box.center
@@ -229,17 +232,17 @@ def drawCrafting(app, screen):
     pageLength = int(totalWidth / (slot_wh + 12))
     startInd = app.func.craftingPage * pageLength
     numCrafts = len(app.player.canCraft)
-    pygame.draw.rect(screen, "#767C92", (app.width * 0.09, app.height * 0.75,
-                            app.width * 0.82, app.height * 0.15), 0)
+    rect = pygame.draw.rect(screen, "#767C92", (app.width * 0.09, app.height * 0.75,
+                            app.width * 0.82, slot_wh + 48), 0)
     craftHeader = app.largeFont.render(f'Crafting({numCrafts})', 1, "#545B64")
     pos = craftHeader.get_rect()
-    pos.left, pos.centery = app.width * 0.10, app.height * 0.78
+    pos.left, pos.centery = rect.left + 8, rect.top + 16
     screen.blit(craftHeader, pos)
     if len(app.player.canCraft) > app.func.craftingSelected and app.player.canCraft[app.func.craftingSelected]:
         selected = app.player.canCraft[app.func.craftingSelected]
-        name = app.font.render(f'{selected["output"].name.capitalize()}(x{selected["output"].count})', 1, '#545B64')
+        name = app.font.render(f'{selected["output"].displayName.capitalize()}(x{selected["output"].count})', 1, '#545B64')
         pos = name.get_rect()
-        pos.right, pos.centery = app.width * 0.89, app.height * 0.78
+        pos.right, pos.centery = rect.right - 8, rect.top + 16
         screen.blit(name, pos)
     for i in range(pageLength):
         if (startInd + i) >= numCrafts:
@@ -247,23 +250,22 @@ def drawCrafting(app, screen):
         craft = app.player.canCraft[startInd + i]["output"]
         if not craft:
             continue
-        pygame.draw.rect(screen, "#965816", (app.width * 0.1 + 8 + (i * (slot_wh + 12)) - 4,
-                                app.height * 0.85 - (slot_wh / 2) - 4,
+        slot_box = pygame.draw.rect(screen, "#965816", (app.width * 0.1 + 8 + (i * (slot_wh + 12)) - 4,
+                                rect.centery + 6 - (slot_wh / 2),
                                 slot_wh + 8, slot_wh + 8), 0)
         if app.func.craftingSelected == startInd + i:
             pygame.draw.rect(screen, "#B4B4B4", (app.width * 0.1 + 8 + (i * (slot_wh + 12)) - 4,
-                                app.height * 0.85 - (slot_wh / 2) - 4,
+                                rect.centery + 6 - (slot_wh / 2),
                                 slot_wh + 8, slot_wh + 8), 2)
         image = pygame.transform.scale(getImage(app, craft.name), (slot_wh - 2, slot_wh - 2))
         screen.blit(image, (app.width * 0.1 + 8 + (i * (slot_wh + 12)) + 2,
-                            app.height * 0.85 - (slot_wh / 2) + 2))
+                            rect.centery))
         canCraftNum = numCanCraft(app, app.player.canCraft[startInd + i])
         if not canCraftNum:
             continue
         count = app.smallFont.render(f'{canCraftNum * craft.count}', 1, '#38332F')
         pos = count.get_rect()
-        pos.left, pos.centery = (app.width * 0.1 + 8 + (i * (slot_wh + 12)),
-                            app.height * 0.85 - (slot_wh / 2) + 5)
+        pos.left, pos.centery = slot_box.left + 2, slot_box.top + 8
         screen.blit(count, pos)
 
 def redrawAll(app, screen:pygame.Surface):
@@ -279,8 +281,6 @@ def redrawAll(app, screen:pygame.Surface):
             drawSettings(app, screen)
         if app.func.isCrafting:
             drawCrafting(app, screen)
-    # screen.create_image(app.func.mouseX, app.func.mouseY, image=getImage(app, "cursor"),
-    #                     anchor="nw")
 
 
 def timerFired(app):
@@ -307,7 +307,8 @@ def timerFired(app):
         FUNC
         """
         app.func.updateHovering(app)
-        if app.func.holding and time() - app.func.holding > 0.2:
+        speed = app.player.getMineSpeed(app)
+        if app.func.holding and time() - app.func.holding > (1 / speed) / 2:
             app.func.handleClick(app)
             app.func.holding = None
 
@@ -325,6 +326,7 @@ def main():
     app = App()
     
     pygame.time.set_timer(pygame.USEREVENT + 1, 20)
+    pygame.mouse.set_cursor(pygame.cursors.tri_left)
     
     while True: # main event loop
         app.game.loadChunks(app)

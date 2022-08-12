@@ -12,6 +12,8 @@ class Enemy(Entity):
         self.orient = 1
         self.damage = 0.5
         self.damageCooldown = 0
+        
+        self.darkness = 0
     
     def tick(self, app):
         # check if player is in range
@@ -36,8 +38,20 @@ class Enemy(Entity):
         if self.damageCooldown < 0:
             self.damageCooldown = 0
         
+        self.darkness = self.darkestNearbyShadow(app)
+        
         if hasattr(self, "mobUpdate"):
-            self.mobUpdate()
+            self.mobUpdate(app)
+        
+        if self.orient == 1:
+            self.image = pygame.transform.flip(self.image, True, False)
+        
+        if self.darkness > 0 and not app.func.debug:
+            alpha = int(self.darkness / 4 * 240)
+            dark = pygame.Surface((self.rect.width, self.rect.height))
+            dark.set_alpha(alpha)
+            dark.fill((0, 0, 0))
+            self.image.blit(dark, (0, 0))
     
     def moveRight(self, amount = 0.05):
         self.dx += amount
@@ -52,6 +66,8 @@ class Enemy(Entity):
             self.moveRight(amount)
 
     def attack(self, app):
+        if app.player.spawnInvincibility > 0:
+            return
         app.player.health -= self.damage
         if self.x < app.player.x:
             app.player.dy -= 0.2
@@ -63,6 +79,7 @@ class Enemy(Entity):
             app.paused = True
             app.deathScreen = True
         self.damageCooldown = 5
+        app.player.spawnInvincibility = 50
     
     def takeDamage(self, app, damage):
         self.health -= damage
@@ -75,6 +92,15 @@ class Enemy(Entity):
         self.dy -= 0.2
         self.isHurt = 0
         self.spriteIndex = 0
+    
+    def darkestNearbyShadow(self, app):
+        darkest = 0
+        for x in range(-1, 2):
+            for y in range(-1, 2):
+                block = getBlockFromCoords(app, self.x + x, self.y + y)
+                if block and block.darkness > darkest:
+                    darkest = block.darkness
+        return darkest
 
 class Mushroom(Enemy):
     def __init__(self, app, x, y):
@@ -112,7 +138,7 @@ class Mushroom(Enemy):
         self.rect = self.image.get_rect()
         self.rect.center = (-self.width, -self.height)
 
-    def mobUpdate(self):
+    def mobUpdate(self, app):
         if self.isHurt >= 0: # hurt sprites
             self.isHurt += 1
             if self.isHurt == 4:
@@ -125,10 +151,7 @@ class Mushroom(Enemy):
         else: # idle
             self.spriteIndex = (self.spriteIndex + 1) % len(self.idle)
             self.image = self.idle[self.spriteIndex]
-        
-        if self.orient == -1:
-            self.image = pygame.transform.flip(self.image, True, False)
-    
+
     def die(self, app):
         chunk = app.game.getChunk(app, app.game.getChunkIndex(self.x))
         chunk.mobs.remove(self)
@@ -167,7 +190,7 @@ class Slime(Enemy):
         self.rect = self.image.get_rect()
         self.rect.center = (-self.width, -self.height)
     
-    def mobUpdate(self):
+    def mobUpdate(self, app):
         if self.isHurt >= 0:
             self.isHurt += 1
             if self.isHurt == 4:
@@ -177,9 +200,6 @@ class Slime(Enemy):
         else:
             self.spriteIndex = (self.spriteIndex + 1) % len(self.idle)
             self.image = self.idle[self.spriteIndex]
-        
-        if self.orient == 1:
-            self.image = pygame.transform.flip(self.image, True, False)
     
     def die(self, app):
         chunk = app.game.getChunk(app, app.game.getChunkIndex(self.x))

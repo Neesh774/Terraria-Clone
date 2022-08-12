@@ -30,6 +30,7 @@ class Chunk:
 
         # returns a height for every point in the chunk
         terrain = generateTerrain(self.startY, self.endY)
+        self.terrain = terrain
         chunkTrees = 0
         for i in range(CHUNK_SIZE):
             height = terrain[i]
@@ -38,37 +39,30 @@ class Chunk:
             row_dirt_level = height - DIRT_LEVEL - random.randint(-1, 1)
             for r in range(row_ground_level + 1, -1, -1):
                 if r >= row_ground_level: # 24
-                    block = Air(app, x+i, r, chunkI)
+                    block = Air(app, x+i, r, chunkI, darkness = height - r - 2)
                 elif r >= row_grass_level: # 9
-                    block = Grass(app, x+i, r, chunkI)
+                    block = Grass(app, x+i, r, chunkI, darkness = height - r - 2)
                 elif r > row_dirt_level: # 4
-                    block = Dirt(app, x+i, r, chunkI)
+                    block = Dirt(app, x+i, r, chunkI, darkness = height - r - 2)
                 elif r > 0: # 0
-                    block = Stone(app, x+i, r, chunkI)
+                    block = Stone(app, x+i, r, chunkI, darkness = height - r - 2)
                 else: # -1
-                    block = Bedrock(app, x+i, r, chunkI)
+                    block = Bedrock(app, x+i, r, chunkI, darkness = height - r - 2)
                 self.blocks[(x+i, r)] = block
                 
             if random.randint(0, 15) == 0 and chunkTrees < 3:
                 chunkTrees += 1
                 treeHeight = random.randint(8, 14)
                 for j in range(0, treeHeight):
-                    self.blocks[(x + i, row_ground_level + j)] = Log(app, x + i, row_ground_level + j, chunkI, natural=True)
+                    self.blocks[(x + i, row_ground_level + j)] = Tree(app, x + i, row_ground_level + j, chunkI)
         
-        # Create random points to make caves at
-        for i in range(random.randint(0, 7)):
-            point = (random.randint(self.x, self.x + CHUNK_SIZE),
-                        random.randint(0, GROUND_LEVEL - GRASS_LEVEL - 5))
-            radius = random.randint(2, 4)
-            self.points.append({
-                "coords": point,
-                "radius": radius
-            })
+        self.generatePoints(app)
         
         # take into account self points and nearby points
         for pointObj in closePoints + self.points:
             point = pointObj["coords"]
             rad = pointObj["radius"]
+            pointType = pointObj["type"]
             for i in range(point[0] - rad, point[0] + rad):
                 for j in range(point[1] - rad, point[1] + rad):
                     dist = math.sqrt((i - point[0])**2 + (j - point[1])**2)
@@ -76,7 +70,14 @@ class Chunk:
                     if ((i, j) in self.blocks and dist <= (rad + randomChance)
                         and self.blocks[(i, j)].breakable):
                         self.blocks[(i, j)].kill()
-                        self.blocks[(i, j)] = Air(app, i, j, chunkI)
+                        if pointType == TerrainPoints.CAVE:
+                            self.blocks[(i, j)] = Air(app, i, j, chunkI, darkness = 4)
+                        elif pointType == TerrainPoints.ANDESITE:
+                            self.blocks[(i, j)] = Andesite(app, i, j, chunkI, darkness = 4)
+                        elif pointType == TerrainPoints.DIORITE:
+                            self.blocks[(i, j)] = Diorite(app, i, j, chunkI, darkness = 4)
+                        elif pointType == TerrainPoints.IRON:
+                            self.blocks[(i, j)] = IRON_ORE(app, i, j, chunkI, darkness = 4)
     
     def getRange(self, app):
         return self.x, self.x + CHUNK_SIZE
@@ -144,6 +145,33 @@ class Chunk:
                 else:
                     newChunk = app.game.getChunk(app, self.index + 1)
                 newChunk.mobs.add(mob)
+    
+    def generatePoints(self, app):
+        # Generate terrain points to be used for caves or stone generation
+        for i in range(random.randint(0, 10)):
+            typeRand = random.randint(0, 4)
+            if typeRand == 0:
+                pointType = TerrainPoints.CAVE
+                radius = random.randint(2, 6)
+                y = random.randint(0, GROUND_LEVEL - GRASS_LEVEL - 5)
+            elif typeRand < 3:
+                pointType = TerrainPoints.ANDESITE
+                radius = random.randint(3, 4)
+                y = random.randint(0, GROUND_LEVEL - DIRT_LEVEL - 6)
+            elif typeRand < 4:
+                pointType = TerrainPoints.DIORITE
+                radius = random.randint(1, 3)
+                y = random.randint(0, GROUND_LEVEL - DIRT_LEVEL - 10)
+            elif typeRand <= 4:
+                pointType = TerrainPoints.IRON
+                radius = random.randint(1, 2)
+                y = random.randint(0, GROUND_LEVEL - GRASS_LEVEL - 10)
+            point = (random.randint(self.x, self.x + CHUNK_SIZE), y)
+            self.points.append({
+                "coords": point,
+                "radius": radius,
+                "type": pointType
+            })
 
     def __eq__(self, other):
         return self.index == other.index
@@ -203,40 +231,15 @@ class Game:
         chunksOnScreen = int(app.width / (CHUNK_SIZE * UNIT_WH)) + 2
         startChunkIndex = app.player.chunk - math.floor(chunksOnScreen / 2)
         endChunkIndex = startChunkIndex + chunksOnScreen
-        self.loaded = [self.chunks[i] for i in self.chunks if startChunkIndex <= i <= endChunkIndex]
-    
-    def breakBlock(self, app, block: Block, drop=True):
-        chunk = self.getChunk(app, block.chunkInd)
-        block = chunk.blocks[(block.x, block.y)]
-        item = Item(app, block.type.name, block.x, block.y, block.chunkInd, canPlace=True)
-        if block.type.name == "LOG" and block.natural: # breaking whole tree
-            # get to bottom of tree
-            while ((block.x, block.y - 1) in chunk.blocks and
-                chunk.blocks[(block.x, block.y - 1)].type.name == "LOG" and
-                chunk.blocks[(block.x, block.y - 1)].natural):
-                block = chunk.blocks[(block.x, block.y - 1)]
-            # break every log in the tree
-            while block.type.name == "LOG" and block.natural:
-                chunk.blocks[(block.x, block.y)] = Air(app, block.x, block.y, block.chunkInd)
-                app.game.blocks.remove(block)
-                randPos = random.random() * 0.8 - 0.4
-                item = Item(app, block.type.name, block.x + randPos, block.y,
-                            block.chunkInd, canPlace=True,
-                            dx=randPos, dy=-0.2)
-                chunk.generateAir(app, block) # add air around block
-                chunk.ungenerateAir(app, block) # remove air that isn't in contact with a solid block
-                chunk.items.add(item)
-                if (block.x, block.y + 1) in chunk.blocks:
-                    block = chunk.blocks[(block.x, block.y + 1)]
-                else:
-                    break
-        else: # any other type of block
-            chunk.blocks[(block.x, block.y)] = Air(app, block.x, block.y, block.chunkInd)
-            app.game.blocks.remove(block)
-            chunk.generateAir(app, block)
-            chunk.ungenerateAir(app, block)
-            chunk.items.add(item)
-        return item
+        loaded = [self.chunks[i] for i in self.chunks if startChunkIndex <= i <= endChunkIndex]
+
+        for chunk in self.loaded:
+            self.blocks.remove(*chunk.blocks.values())
+        
+        for chunk in loaded:
+            self.blocks.add(*chunk.blocks.values())
+
+        self.loaded = loaded
 
     def placeBlock(self, app, item: Item, block: Block):
         if block.y >= BUILD_HEIGHT or block.y <= 0:
@@ -261,39 +264,42 @@ class Game:
         bottom_side = int(app.player.y + PLAYER_MOB_SPAWN_RADIUS)
         x = random.randint(left_side, right_side)
         y = random.randint(top_side, bottom_side)
-        isNight = app.game.time < 6 or app.game.time > 18
-        if x > app.player.x - 3 and x < app.player.x + 3:
+        if x > app.player.x - 3 and x < app.player.x + 3: # within player
             return
         if y > app.player.y - 3 and y < app.player.y + 3:
             return
         block = getBlockFromCoords(app, x, y)
-        if not block or block.solid:
+        if not block or block.solid: # if there's no block or it's a solid block
             return
         chunk = self.getChunk(app, block.chunkInd)
-        if len(chunk.mobs) >= MOB_LIMIT:
+        if len(chunk.mobs) >= MOB_LIMIT: # over mob limit in chunk
             return
         onGround = isOnGround(app, x, y)
         if not onGround:
             return
-        for mob in chunk.mobs:
+        for mob in chunk.mobs: # within other mob
             if mob.x - 1 < x < mob.x + 1 and mob.y - 1 < y < mob.y + 1:
                 return
-        if y > GROUND_LEVEL and isNight:
+        if y > GROUND_LEVEL:
             mob = Mushroom(app, x, y)
         else:
             mob = Slime(app, x, y)
+        if pygame.sprite.spritecollideany(mob, app.game.blocks):
+            return
         self.getChunk(app, block.chunkInd).mobs.add(mob)
         return mob
 
 class Player(Entity):
     def __init__(self, app):
         self.chunk = 9
-        self.inventory = [None] * 9
+        self.inventory = [GodItem(1)] + [None] * 8
         self.orient = 1
         self.health = 10
         self.falling = 0
         self.respawnPoint = (0.1, GROUND_LEVEL)
         self.canCraft = []
+        self.mineLevel = 0
+        self.mineSpeed = 1
 
 
         block = getBlockFromCoords(app, self.respawnPoint[0], self.respawnPoint[1])
@@ -316,9 +322,10 @@ class Player(Entity):
         self.originalImage = pygame.transform.scale(getImage(app, "boris"), (int(UNIT_WH * 0.8), int(UNIT_WH * 0.8)))
         self.image = self.originalImage
         self.rect = self.image.get_rect()
-    
+
         self.suffocationDamage = True
-    
+        self.spawnInvincibility = 0
+
     def getSprite(self):
         if self.orient == -1:
             return pygame.transform.flip(self.image, True, False)
@@ -366,7 +373,7 @@ class Player(Entity):
                 return
 
     def tick(self, app):
-        if FALL_DAMAGE:
+        if FALL_DAMAGE and self.spawnInvincibility == 0:
             if self.dy > 0:
                 self.falling += 1
             else:
@@ -374,6 +381,8 @@ class Player(Entity):
                     dist = self.falling - 24
                     self.health -= dist
                 self.falling = 0
+        if self.spawnInvincibility > 0:
+            self.spawnInvincibility -= 1
         if self.health <= 0:
             app.paused = True
             app.deathScreen = True
@@ -449,6 +458,7 @@ class Player(Entity):
         self.dy = 0
         self.orient = 1
         self.chunk = 9
+        self.spawnInvincibility = 100
         
         self.inventory = [None] * 9
     
@@ -456,17 +466,18 @@ class Player(Entity):
         curChunk = app.game.getChunk(app, self.chunk)
         rightChunk = app.game.getChunk(app, self.chunk + 1)
         mobs = curChunk.mobs.sprites() + rightChunk.mobs.sprites()
+        damage = self.getAttackDamage(app)
         for mob in mobs:
             if isRight:
                 withinXRange = mob.x > self.x and mob.x < self.x + 2
                 withinYRange = mob.y >= self.y and mob.y <= self.y + 1
                 if withinXRange and withinYRange:
-                    mob.takeDamage(app, 1)
+                    mob.takeDamage(app, damage)
             else:
                 withinXRange = mob.x < self.x and mob.x > self.x - 2
                 withinYRange = mob.y >= self.y and mob.y <= self.y + 1
                 if withinXRange and withinYRange:
-                    mob.takeDamage(app, 1)
+                    mob.takeDamage(app, damage)
     def eat(self, food):
         self.health += food.foodValue
         if self.health > 10:
@@ -479,6 +490,62 @@ class Player(Entity):
                 canCraft.append(recipe)
         self.canCraft = canCraft
     
+    def getAttackDamage(self, app):
+         curInv = self.inventory[app.func.selectedInventory]
+         if not curInv or not hasattr(curInv, "attackDamage"):
+             return 1
+         else:
+             if curInv.curCooldown > 0:
+                 return 1
+             else:
+                 return curInv.attackDamage
+    
+    def getMineLevel(self, app):
+        curInv = self.inventory[app.func.selectedInventory]
+        if not curInv or not hasattr(curInv, "mineLevel"):
+            return self.mineLevel
+        else:
+            return curInv.mineLevel
+    
+    def getMineSpeed(self, app):
+        curInv = self.inventory[app.func.selectedInventory]
+        if not curInv or not hasattr(curInv, "mineSpeed"):
+            return self.mineSpeed
+        else:
+            return curInv.mineSpeed
+    
+    def breakBlock(self, app, block: Block, drop=True):
+        chunk = app.game.getChunk(app, block.chunkInd)
+        block = chunk.blocks[(block.x, block.y)]
+        item = Item(app, block.type.name, block.x, block.y, block.chunkInd, canPlace=True)
+        if block.type.name == "TREE": # breaking whole tree
+            # get to bottom of tree
+            while ((block.x, block.y - 1) in chunk.blocks and
+                chunk.blocks[(block.x, block.y - 1)].type.name == "TREE"):
+                block = chunk.blocks[(block.x, block.y - 1)]
+            # break every log in the tree
+            while block.type.name == "TREE":
+                chunk.blocks[(block.x, block.y)] = Air(app, block.x, block.y, block.chunkInd)
+                app.game.blocks.remove(block)
+                randPos = random.random() * 0.8 - 0.4
+                item = Item(app, "LOG", block.x + randPos, block.y,
+                            block.chunkInd, canPlace=True,
+                            dx=randPos, dy=-0.2)
+                chunk.generateAir(app, block) # add air around block
+                chunk.ungenerateAir(app, block) # remove air that isn't in contact with a solid block
+                chunk.items.add(item)
+                if (block.x, block.y + 1) in chunk.blocks:
+                    block = chunk.blocks[(block.x, block.y + 1)]
+                else:
+                    break
+        else: # any other type of block
+            chunk.blocks[(block.x, block.y)] = Air(app, block.x, block.y, block.chunkInd)
+            app.game.blocks.remove(block)
+            chunk.generateAir(app, block)
+            chunk.ungenerateAir(app, block)
+            chunk.items.add(item)
+        return item
+
 class Functionality:
     def __init__(self, app):
         self.mouseX = 0
@@ -549,8 +616,12 @@ class Functionality:
                 if canBeMade(app, recipe):
                     makeRecipe(app, recipe)
                     app.player.updateCanCraft(app)
+                    if self.craftingSelected > len(app.player.canCraft) - 1:
+                        self.craftingSelected = len(app.player.canCraft) - 1
+                    if self.craftingSelected < 0:
+                        self.craftingSelected = 0
         
-        if key == K_PLUS and self.debug:
+        if key == K_EQUALS and self.debug:
             print(eval(input(">> ")))
         """
         PLAYER
@@ -605,7 +676,10 @@ class Functionality:
                 or withinBounds(coords[0], coords[1], coords[0] + 1, coords[1] + 1, x + 0.8, y + 0.4))
 
             isBedrock = app.func.hovering.type == Blocks.BEDROCK
-            self.canInteract = ((not onPlayer) and distance < 4 and (not isBedrock)) or self.debug
+            
+            canBreak = app.player.getMineLevel(app) >= app.func.hovering.mineLevel
+
+            self.canInteract = ((not onPlayer) and distance < 4 and (not isBedrock) and canBreak) or self.debug
         else:
             self.hovering = None
             self.canInteract = False
@@ -613,6 +687,6 @@ class Functionality:
     def handleClick(self, app):
         if self.hovering and self.canInteract:
             if self.hovering.breakable:
-                app.game.breakBlock(app, self.hovering)
+                app.player.breakBlock(app, self.hovering)
                     
         self.updateHovering(app)

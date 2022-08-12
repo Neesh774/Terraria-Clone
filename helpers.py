@@ -18,11 +18,21 @@ class Blocks(Enum):
     GRASS = 0
     DIRT = 1
     STONE = 2
-    BEDROCK = 3
-    LOG = 4
-    PLANKS = 5
-    PLATFORM = 6
-    WALL = 7
+    ANDESITE = 3
+    DIORITE = 4
+    BEDROCK = 5
+    LOG = 6
+    PLANKS = 7
+    PLATFORM = 8
+    WALL = 9
+    TREE = 10
+    IRON_ORE = 11
+    
+class TerrainPoints(Enum):
+    CAVE = 0
+    ANDESITE = 1
+    DIORITE = 2
+    IRON = 3
     
 class Entity(pygame.sprite.Sprite):
     def __init__(self, x, y, dx = 0, dy = 0):
@@ -61,7 +71,7 @@ class Entity(pygame.sprite.Sprite):
         blockRight = getBlockFromCoords(app, math.ceil(self.x), math.ceil(self.y))
         blockTopLeft = getBlockFromCoords(app, math.floor(self.x), math.floor(self.y + 1))
         blockTopRight = getBlockFromCoords(app, math.ceil(self.x), math.floor(self.y + 1))
-        blockBelow = getBlockFromCoords(app, roundHalfUp(self.x), math.floor(self.y) - 1)
+
         if blockTopLeft and blockTopLeft.solid:
             blockTop = blockTopLeft
         elif blockTopRight and blockTopRight.solid:
@@ -73,37 +83,43 @@ class Entity(pygame.sprite.Sprite):
         
         # Right Collision
         if 0 < self.dx:
-            
             topBlock = blockTopLeft and blockTopLeft.solid
             diagBlock = getBlockFromCoords(app, math.ceil(self.x), math.ceil(self.y) + 1)
-            freeDiagBlock = not diagBlock or not diagBlock.solid
+            freeDiagBlock = not diagBlock or not (diagBlock.solid == 1)
             sneak = self.sneak if hasattr(self, "sneak") else False
             if (blockRight and
-                blockRight.solid and
+                blockRight.solid == 1 and
                 not topBlock and
                 freeDiagBlock and
                 onGround and
-                not sneak):
+                not sneak and
+                self.dx > 0.01): # prevent chaining the one jump
                 self.x = blockRight.x
                 self.y = blockRight.y + 1
                 self.dx = 0.01
-            elif blockRight and blockRight.solid:
+            elif blockRight and blockRight.solid == 1:
                 self.dx = 0
                 self.x = blockRight.x - 0.9
 
         # Left Collision
         elif self.dx < 0:
-            
-            topBlock = blockTop and blockTop.solid
+            topBlock = blockTop and blockTop.solid == 1
             diagBlock = getBlockFromCoords(app, math.floor(self.x) - 1, math.ceil(self.y) + 1)
-            freeDiagBlock = not diagBlock or not diagBlock.solid
+            freeDiagBlock = not diagBlock or not (diagBlock.solid == 1)
             sneak = self.sneak if hasattr(self, "sneak") else False
-            if (blockLeft and blockLeft.solid and not topBlock
-                and freeDiagBlock and onGround and not sneak):
+            if (blockLeft and
+                blockLeft.solid == 1 and
+                not topBlock
+                and freeDiagBlock and
+                onGround and
+                not sneak and
+                self.dx < -0.01): # prevent chaining the one jump
                 self.x = blockLeft.x + 1
                 self.y = blockLeft.y + 1
                 self.dx = -0.01
-            elif blockLeft and blockLeft.solid:
+            elif (blockLeft and
+                  blockLeft.solid == 1 and
+                  self.x + self.dx < blockLeft.x + 1):
                 self.dx = 0
                 self.x = blockLeft.x + 1.1
 
@@ -179,13 +195,13 @@ def getPixX(app, x):
 def getPixY(app, y):
     return (app.height * TERRAIN_HEIGHT) + ((app.player.y - y) * UNIT_WH)
 
-def getGround(app, x, y, ignoreHalfBlocks = False):
+def getGround(app, x, y):
     for chunk in app.game.loaded:
         if chunk.inChunk(x):
             for r in range(math.ceil(y), -1, -1):
                 if (x, r) in chunk.blocks and chunk.blocks[(x, r)].solid:
-                    if (not ignoreHalfBlocks) and chunk.blocks[(x, r)].solid == 0.5:
-                        return getGround(app, x, y, True)
+                    if chunk.blocks[(x, r)].isHalf and y <= r:
+                        return chunk.blocks[(x, r)].y
                     else:
                         return chunk.blocks[(x, r)].y + 1
     return -1
@@ -207,17 +223,11 @@ def moveBlock(app, block, canvas):
 
 def checkBackground(app):
     width = app.background.get_width()
-    if min(app.game.bgX) > 0: # Left
-            app.game.bgX = [min(app.game.bgX) - width] + app.game.bgX
-    if max(app.game.bgX) < app.width: # Right
-            app.game.bgX = app.game.bgX + [max(app.game.bgX) + width]
+    newBackgrounds = []
+    for i in range(app.game.bgX[0] - width, app.width, width):
+        newBackgrounds.append(i)
+    app.game.bgX = newBackgrounds
 
-    newList = []
-    for i in app.game.bgX: # Garbage Collector
-        if i > - app.background.get_width():
-            newList.append(i)
-        if i < app.width:
-            newList.append(i)
 def roundHalfUp(d):  # helper-fn
     # Round to nearest with ties going away from zero.
     rounding = decimal.ROUND_HALF_UP
@@ -249,6 +259,9 @@ def belowSurface(app, y):
     if y <= GROUND_LEVEL - GRASS_LEVEL - TERRAIN_VARIATION:
         return True
     return False
+
+def distSurface(y):
+    return GROUND_LEVEL - y
 
 def getSurface(app, x):
     for chunk in app.game.loaded:

@@ -6,6 +6,8 @@ A clone of Terraria written in Python with Tkinter and CMU_112_Graphics.
 
 [Cool video showing off the project](https://youtu.be/68lswXZ8bbA)
 
+[DEMO VIDEO FOR TP3](https://drive.google.com/file/d/1tRAe3TX2sbNZg5mA4x9Xwen2_DBVjCGF/view?usp=sharing)
+
 ### Project Description
 
 A clone of Terraria that has a different UI and some different aspects of gameplay.
@@ -53,6 +55,22 @@ Separated into `blocks.py`, `classes.py`, `helpers.py`, `items.py`, `terraria.py
 ### Changes to Design
 
 None, other than using images instead of solid colors for blocks.
+
+### TP3 Updates
+
+### Technical Updates
+
+- Game now has lighting, so player can't see blocks that they haven't been within 4 blocks of yet
+- Added Andesite and Diorite, which are automatically generated as patches in the ground
+- Placed trees in the background, so the player can move through them but still be able to break them
+- Added tools to the game, such as Wooden Pickaxe, Sword, and Stone Pickaxe, Sword.
+- Used tools to restrict which blocks the player can break
+- Sword does more damage than using bare hand
+- Tools change how quickly you can break a block
+
+### Changes to Design
+
+None, other than lighting
 
 ### Version Control Plan
 
