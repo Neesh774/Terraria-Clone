@@ -312,7 +312,7 @@ class Game:
 class Player(Entity):
     def __init__(self, app):
         self.chunk = 9
-        self.inventory = [GodItem(1)] + [None] * 8
+        self.inventory = [None] * 9
         self.orient = 1
         self.health = 10
         self.falling = 0

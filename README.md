@@ -6,7 +6,7 @@ A clone of Terraria written in Python with Tkinter and PyGame.
 
 [Cool video showing off the project](https://youtu.be/68lswXZ8bbA)
 
-[DEMO VIDEO FOR TP3](https://drive.google.com/file/d/1s6cbiRJssd1PRpy1ETBUmi1Fz0GhhVRA/view?usp=sharing)
+[DEMO VIDEO FOR TP3](https://drive.google.com/file/d/1y9KLb3K-MZLNG_b6CoWI_W1_5G0c352U/view?usp=sharing)
 
 ## How To Run
 
